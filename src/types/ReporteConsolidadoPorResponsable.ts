@@ -7,7 +7,9 @@ export interface TrabajadorConsolidado {
   cargo: string | null
   cuenta: string
   horasPorDia: Record<number, string>
+  normaPorDia?: Record<number, string>
   totalHoras: number
+  totalNorma?: number
 }
 
 export interface ResponsableConsolidado {

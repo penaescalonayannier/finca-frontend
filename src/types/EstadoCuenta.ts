@@ -22,7 +22,7 @@ export interface SearchRequest {
   pageSize: number;
   page: number;
   sortBy: string;
-  sortType: 'ASC' | 'DESC';
+  sortType: 'ASC' | 'DES';
 }
 
 export interface PagedResponse<T> {

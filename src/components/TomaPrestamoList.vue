@@ -2,7 +2,9 @@
 import { ref, onMounted } from 'vue';
 import TomaPrestamoService from '@/services/TomaPrestamoService';
 import { TomaPrestamo, TipoTomaPrestamo } from '@/types/TomaPrestamo';
-import CrearTomaPrestamo from './CrearTomaPrestamo.vue'; 
+import CrearTomaPrestamo from './CrearTomaPrestamo.vue';
+import { notify } from '@/composables/useNotification';
+import { confirmDialog } from '@/composables/useConfirmDialog'; 
 
 // =========================================================================
 // ESTADO Y FILTROS
@@ -22,9 +24,6 @@ const mostrarModalCrear = ref(false);
 const isEditing = ref(false);
 const editingTomaId = ref<string | undefined>(undefined);
 
-// Estado para el modal de eliminación
-const mostrarModalEliminar = ref(false);
-const tomaAEliminar = ref<TomaPrestamo | null>(null);
 
 // AÑADIDO: Placeholder para el ID del crédito seleccionado
 const selectedCreditoId = ref('a1b2c3d4-e5f6-7890-1234-567890abcdef'); 
@@ -128,31 +127,25 @@ const editarToma = (id: string) => {
 // MÉTODOS DE ELIMINACIÓN
 // =========================================================================
 
-const confirmarEliminar = (toma: TomaPrestamo) => {
-    tomaAEliminar.value = toma;
-    mostrarModalEliminar.value = true;
-};
+const confirmarEliminar = async (toma: TomaPrestamo) => {
+    const confirmed = await confirmDialog.delete(toma.cuentaDestino || toma.id);
 
-const eliminarToma = async () => {
-    if (!tomaAEliminar.value?.id) return;
-    
-    isLoading.value = true;
-    try {
-        await TomaPrestamoService.delete(tomaAEliminar.value.id);
-        mostrarModalEliminar.value = false;
-        tomaAEliminar.value = null;
-        // Recargar la lista después de eliminar
-        buscarTomaPrestamos();
-        alert('Toma de préstamo eliminada correctamente.');
-    } catch (error: any) {
-        console.error('Error al eliminar la toma de préstamo:', error);
-        let errorMessage = 'Error al eliminar la toma de préstamo';
-        if (error.response?.data?.message) {
-            errorMessage += `: ${error.response.data.message}`;
+    if (confirmed) {
+        isLoading.value = true;
+        try {
+            await TomaPrestamoService.delete(toma.id!);
+            notify.success('Toma eliminada', 'La toma de préstamo fue eliminada correctamente');
+            buscarTomaPrestamos();
+        } catch (error: any) {
+            console.error('Error al eliminar la toma de préstamo:', error);
+            let errorMessage = 'Error al eliminar la toma de préstamo';
+            if (error.response?.data?.message) {
+                errorMessage += `: ${error.response.data.message}`;
+            }
+            notify.error('Error', errorMessage);
+        } finally {
+            isLoading.value = false;
         }
-        alert(errorMessage);
-    } finally {
-        isLoading.value = false;
     }
 };
 
@@ -338,18 +331,6 @@ onMounted(() => {
         </div>
     </div>
 
-    <!-- Modal de Confirmación para Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminación</h3>
-        <p>¿Está seguro de eliminar esta toma de préstamo?</p>
-        <p><strong>{{ tomaAEliminar?.cuentaDestino }}</strong> - {{ formatCurrency(tomaAEliminar?.importe || 0) }}</p>
-        <div class="modal-buttons">
-          <button @click="eliminarToma" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 

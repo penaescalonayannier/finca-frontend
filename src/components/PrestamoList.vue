@@ -157,17 +157,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminacion</h3>
-        <p>¿Esta seguro de eliminar el prestamo <strong>{{ prestamoEliminar?.numeroContrato }}</strong>?</p>
-        <div class="modal-buttons">
-          <button @click="eliminarPrestamo" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -179,6 +168,8 @@ import CrearPrestamo from './CrearPrestamo.vue'
 import CrearTomaPrestamo from './CrearTomaPrestamo.vue'
 import type { Prestamo } from '@/types/Prestamo'
 import type { SearchFilter } from '@/types/EstadoCuenta'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const router = useRouter()
 
@@ -191,10 +182,8 @@ const isLoading = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const mostrarModalCrearToma = ref(false)
 const prestamoEditando = ref<Prestamo | null>(null)
-const prestamoEliminar = ref<Prestamo | null>(null)
 const prestamoSeleccionado = ref<Prestamo | null>(null)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
@@ -246,10 +235,26 @@ const cargarPrestamos = async () => {
   try {
     const filters: SearchFilter[] = []
 
+    // Agregar filtros de búsqueda por texto
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'nombrePrestamista',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'descripcion',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
+
     const response = await PrestamoService.buscarPrestamos({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value,
+      query: '',
       filter: filters,
     })
 
@@ -310,21 +315,18 @@ const handleTomaPrestamoCreada = () => {
   cargarPrestamos() // Recargar para actualizar importes utilizados
 }
 
-const confirmarEliminar = (prestamo: Prestamo) => {
-  prestamoEliminar.value = prestamo
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (prestamo: Prestamo) => {
+  const confirmed = await confirmDialog.delete(prestamo.numeroContrato || prestamo.id)
 
-const eliminarPrestamo = async () => {
-  if (!prestamoEliminar.value?.id) return
-  try {
-    await PrestamoService.eliminarPrestamo(prestamoEliminar.value.id)
-    mostrarModalEliminar.value = false
-    prestamoEliminar.value = null
-    cargarPrestamos()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    alert('Error al eliminar el prestamo')
+  if (confirmed) {
+    try {
+      await PrestamoService.eliminarPrestamo(prestamo.id!)
+      notify.success('Prestamo eliminado', 'El prestamo fue eliminado correctamente')
+      cargarPrestamos()
+    } catch (error) {
+      console.error('Error al eliminar:', error)
+      notify.error('Error', 'No se pudo eliminar el prestamo')
+    }
   }
 }
 

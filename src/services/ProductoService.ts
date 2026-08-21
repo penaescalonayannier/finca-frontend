@@ -12,13 +12,14 @@ interface SearchParams {
   size?: number
   page?: number
   sortBy?: string
-  sortType?: 'ASC' | 'DESC'
+  sortType?: 'ASC' | 'DES'
 }
 
-interface ImportResponse {
-  status?: string
-  message?: string
-  count?: number
+interface ImportExcelResponse {
+  totalImportados: number
+  totalErrores: number
+  productosCreados: string[]
+  errores: string[]
 }
 
 class ProductoService {
@@ -44,8 +45,8 @@ class ProductoService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || '',
-      sortType: filtros.sortType || 'ASC'
+      sortBy: filtros.sortBy || 'createdAt',
+      sortType: filtros.sortType || 'DES'
     }
 
     return axios.post(`${API_BASE_URL}/search`, requestBody, {
@@ -55,11 +56,11 @@ class ProductoService {
     })
   }
 
-  importarCsv(file: File): Promise<AxiosResponse<ImportResponse>> {
+  importarExcel(file: File): Promise<AxiosResponse<ImportExcelResponse>> {
     const formData = new FormData()
     formData.append('file', file)
 
-    return axios.post(`${API_BASE_URL}/import-csv`, formData, {
+    return axios.post(`${API_BASE_URL}/import-excel`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }

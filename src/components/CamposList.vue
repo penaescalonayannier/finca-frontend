@@ -95,17 +95,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminacion</h3>
-        <p>¿Eliminar el campo <strong>{{ camposEliminar?.campo }}</strong> del bloque <strong>{{ camposEliminar?.bloque }}</strong>?</p>
-        <div class="modal-buttons">
-          <button @click="eliminarCampos" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -113,6 +102,8 @@
 import { ref, computed, onMounted } from 'vue'
 import CamposService from '@/services/CamposService'
 import CrearCampos from './CrearCampos.vue'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Campos } from '@/types/Campos'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 
@@ -125,9 +116,7 @@ const isLoading = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const camposEditando = ref<Campos | null>(null)
-const camposEliminar = ref<Campos | null>(null)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
@@ -145,10 +134,26 @@ const cargarCampos = async () => {
   try {
     const filters: SearchFilter[] = []
 
+    // Agregar filtros de búsqueda por texto
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'nombre',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'codigo',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
+
     const response = await CamposService.buscarCampos({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value,
+      query: '',
       filter: filters,
     })
 
@@ -197,21 +202,18 @@ const editarCampos = (campo: Campos) => {
   mostrarModalEditar.value = true
 }
 
-const confirmarEliminar = (campo: Campos) => {
-  camposEliminar.value = campo
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (campo: Campos) => {
+  const confirmed = await confirmDialog.delete(`${campo.campo} (Bloque: ${campo.bloque})`)
 
-const eliminarCampos = async () => {
-  if (!camposEliminar.value?.id) return
-  try {
-    await CamposService.eliminarCampos(camposEliminar.value.id)
-    mostrarModalEliminar.value = false
-    camposEliminar.value = null
-    cargarCampos()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    alert('Error al eliminar el campo')
+  if (confirmed) {
+    try {
+      await CamposService.eliminarCampos(campo.id!)
+      notify.success('Campo eliminado', 'El campo fue eliminado correctamente')
+      cargarCampos()
+    } catch (error) {
+      console.error('Error al eliminar:', error)
+      notify.error('Error', 'No se pudo eliminar el campo')
+    }
   }
 }
 

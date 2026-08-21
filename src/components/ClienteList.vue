@@ -113,23 +113,28 @@ const cargarClientes = async () => {
   try {
     console.log('Buscando clientes...');
 
-    // 1. Definir filtros (si desea filtrar por campos específicos)
+    // 1. Definir filtros con CONTAINS para búsqueda de texto
     const filters: SearchFilter[] = [];
-    // Ejemplo: Si quiere filtrar por RUC, podría añadir:
-    // if (searchQuery.value) {
-    //   filters.push({
-    //     key: 'ruc',
-    //     operator: 'EQUALS',
-    //     value: searchQuery.value,
-    //     logicalOperation: 'AND'
-    //   })
-    // }
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'nombre',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'ruc',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
 
     // 2. Llamada al servicio con parámetros de búsqueda
     const response = await ClienteService.buscarClientes({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value, // Usar 'query' para la búsqueda general
+      query: '',
       filter: filters,
     });
 

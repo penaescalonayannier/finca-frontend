@@ -116,22 +116,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminación</h3>
-        <p>¿Eliminar la asignación del trabajador al reporte?</p>
-        <p class="warning-text">
-          <strong>Trabajador:</strong> {{ obtenerNombreTrabajador(asignacionEliminar?.trabajador) }}
-          <br>
-          <strong>Reporte:</strong> {{ obtenerCodigoReporte(asignacionEliminar?.reporte) }}
-        </p>
-        <div class="modal-buttons">
-          <button @click="eliminarAsignacion" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -146,6 +130,8 @@ import type { Trabajador } from '@/types/Trabajador'
 import type { Reporte } from '@/types/Reporte'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 import type { AxiosError } from 'axios'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 // Estado
 const asignaciones = ref<TrabajadorReporte[]>([])
@@ -162,9 +148,7 @@ const filtroReporte = ref('')
 // Modales
 const mostrarModalAsignar = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const asignacionEditando = ref<TrabajadorReporte | null>(null)
-const asignacionEliminar = ref<TrabajadorReporte | null>(null)
 
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
@@ -308,22 +292,21 @@ const editarAsignacion = (asignacion: TrabajadorReporte) => {
   mostrarModalEditar.value = true
 }
 
-const confirmarEliminar = (asignacion: TrabajadorReporte) => {
-  asignacionEliminar.value = asignacion
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (asignacion: TrabajadorReporte) => {
+  // Build a display name using the trabajador info
+  const trabajadorNombre = obtenerNombreTrabajador(asignacion.trabajador)
+  const confirmed = await confirmDialog.delete(trabajadorNombre || asignacion.id)
 
-const eliminarAsignacion = async () => {
-  if (!asignacionEliminar.value?.id) return
-  try {
-    await TrabajadorReporteService.eliminarAsignacion(asignacionEliminar.value.id)
-    mostrarModalEliminar.value = false
-    asignacionEliminar.value = null
-    cargarAsignaciones()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    const err = error as AxiosError<{ message: string }>
-    alert(err.response?.data?.message || 'Error al eliminar la asignación')
+  if (confirmed) {
+    try {
+      await TrabajadorReporteService.eliminarAsignacion(asignacion.id!)
+      notify.success('Asignacion eliminada', 'La asignacion fue eliminada correctamente')
+      cargarAsignaciones()
+    } catch (error) {
+      console.error('Error al eliminar:', error)
+      const err = error as AxiosError<{ message: string }>
+      notify.error('Error', err.response?.data?.message || 'Error al eliminar la asignacion')
+    }
   }
 }
 

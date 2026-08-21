@@ -18,13 +18,13 @@
 
         <div class="form-row">
           <div class="form-group form-group-half">
-            <label for="codigo">Código *</label>
+            <label for="codigo">Código (auto-generado)</label>
             <input
               id="codigo"
-              v-model="form.codigo"
+              :value="codigoPreview"
               type="text"
-              required
-              placeholder="Ej: REP-2026-06"
+              disabled
+              class="input-disabled input-codigo"
             />
           </div>
 
@@ -34,6 +34,20 @@
               id="fecha"
               v-model="form.fecha"
               type="date"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group form-group-half">
+            <label for="year">Año *</label>
+            <input
+              id="year"
+              v-model="form.year"
+              type="text"
+              required
+              disabled
+              class="input-disabled"
             />
           </div>
         </div>
@@ -87,17 +101,6 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group form-group-half">
-            <label for="year">Año *</label>
-            <input
-              id="year"
-              v-model="form.year"
-              type="text"
-              required
-              placeholder="Ej: 2026"
-            />
-          </div>
-
           <div class="form-group form-group-half">
             <label for="mes">Mes *</label>
             <select id="mes" v-model="form.mes" required class="form-select">
@@ -306,7 +309,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import ReporteService from '@/services/ReporteService'
 import DiaTrabajoService from '@/services/DiaTrabajoService'
 import TrabajadorService from '@/services/TrabajadorService'
@@ -333,6 +336,13 @@ const diasSeleccionados = ref<Set<number>>(new Set())
 const trabajadoresSeleccionados = ref<Set<string>>(new Set())
 const horasPorDefecto = ref<string>('8')
 
+// Valores por defecto
+const today = new Date()
+const currentYear = today.getFullYear().toString()
+const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const currentMonth = meses[today.getMonth()]
+const currentDate = today.toISOString().split('T')[0]
+
 // Formulario
 const form = ref<ReporteRequest>({
   codigo: '',
@@ -340,9 +350,9 @@ const form = ref<ReporteRequest>({
   campo: '',
   area: '',
   norma: '',
-  fecha: '',
-  year: '',
-  mes: '',
+  fecha: currentDate,
+  year: currentYear,
+  mes: currentMonth,
   trabajadorResponsableId: undefined,
   dias: []
 })
@@ -352,6 +362,27 @@ const trabajadoresOrdenados = computed(() => {
   return [...trabajadores.value].sort((a, b) => {
     return a.nombre.localeCompare(b.nombre)
   })
+})
+
+// Código que se generará (cargado del backend)
+const codigoPreview = ref<string>('Cargando...')
+
+// Cargar el próximo código disponible
+const cargarProximoCodigo = async () => {
+  if (form.value.year && form.value.mes) {
+    try {
+      const codigo = await ReporteService.getNextCodigo(form.value.year, form.value.mes)
+      codigoPreview.value = codigo
+    } catch (error) {
+      console.error('Error al cargar código:', error)
+      codigoPreview.value = 'Error al cargar'
+    }
+  }
+}
+
+// Recargar código cuando cambie el mes
+watch(() => form.value.mes, () => {
+  cargarProximoCodigo()
 })
 
 // Obtener trabajadores del grupo seleccionado
@@ -425,10 +456,7 @@ const deseleccionarTodosDelGrupo = () => {
 // Navegar entre pasos
 const validarPaso = (): boolean => {
   if (pasoActual.value === 1) {
-    if (!form.value.codigo.trim()) {
-      alert('El código es obligatorio')
-      return false
-    }
+    // El código se genera automáticamente en el backend
     if (!form.value.bloque.trim()) {
       alert('El bloque es obligatorio')
       return false
@@ -561,6 +589,7 @@ const cargarGrupos = async () => {
 onMounted(async () => {
   await cargarTrabajadores()
   await cargarGrupos()
+  await cargarProximoCodigo()
 })
 </script>
 
@@ -616,6 +645,12 @@ onMounted(async () => {
   font-size: 1.1em;
 }
 
+.input-codigo {
+  font-family: monospace;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
 .form-row {
   display: flex;
   gap: 15px;
@@ -654,6 +689,12 @@ onMounted(async () => {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.input-disabled {
+  background-color: #e9ecef;
+  color: #495057;
+  cursor: not-allowed;
 }
 
 .form-input {

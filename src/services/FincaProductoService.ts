@@ -1,12 +1,14 @@
 // src/services/FincaProductoService.ts
 
 import axios, { AxiosResponse } from 'axios'
-import type { 
-  FincaProducto, 
+import type {
+  FincaProducto,
   FincaProductoResponse,
   AsignarProductoRequest,
   ActualizarStockRequest,
-  RemoverProductoRequest
+  RemoverProductoRequest,
+  EntradaProduccionRequest,
+  EntradaProduccionResponse
 } from '@/types/FincaProducto'
 import type { SearchFilter, PagedResponse } from '@/types/EstadoCuenta'
 
@@ -18,7 +20,7 @@ interface SearchParams {
   size?: number
   page?: number
   sortBy?: string
-  sortType?: 'ASC' | 'DESC'
+  sortType?: 'ASC' | 'DES'
 }
 
 class FincaProductoService {
@@ -36,6 +38,13 @@ class FincaProductoService {
    */
   actualizarStock(data: ActualizarStockRequest): Promise<AxiosResponse<{ id: string }>> {
     return axios.put(`${API_BASE_URL}/stock`, data)
+  }
+
+  /**
+   * Registrar entrada de producción (suma cantidad al stock existente)
+   */
+  entradaProduccion(data: EntradaProduccionRequest): Promise<AxiosResponse<EntradaProduccionResponse>> {
+    return axios.post(`${API_BASE_URL}/entrada-produccion`, data)
   }
 
   /**
@@ -63,8 +72,8 @@ class FincaProductoService {
       query: params.query || '',
       pageSize: params.size || 10,
       page: params.page || 0,
-      sortBy: params.sortBy || '',
-      sortType: params.sortType || 'ASC'
+      sortBy: params.sortBy || 'createdAt',
+      sortType: params.sortType || 'DES'
     }
 
     return axios.post(`${API_BASE_URL}/search`, requestBody, {

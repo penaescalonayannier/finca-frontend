@@ -90,6 +90,8 @@
             ${{ (relacion.productoPrice * relacion.stock).toFixed(2) }}
           </td>
           <td class="acciones">
+            <button @click="abrirModalEntrada(relacion)" class="btn-entrada">📥 Entrada</button>
+            <button @click="abrirModalSalida(relacion)" class="btn-salida">📤 Salida</button>
             <button @click="editarStock(relacion)" class="btn-editar">✏️ Stock</button>
             <button @click="confirmarRemover(relacion)" class="btn-eliminar">🗑️</button>
           </td>
@@ -217,6 +219,178 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal Entrada de Producción -->
+    <div v-if="mostrarModalEntrada" class="modal">
+      <div class="modal-content modal-entrada">
+        <span class="close" @click="cerrarModalEntrada">&times;</span>
+        <h3>Entrada de Producción</h3>
+        <p>
+          <strong>{{ relacionEntrada?.productoName }}</strong>
+          en <strong>{{ relacionEntrada?.fincaName }}</strong>
+        </p>
+        <p class="stock-actual">Stock actual: <span class="stock-value">{{ relacionEntrada?.stock }}</span></p>
+
+        <div class="form-group">
+          <label>Cantidad Terminada *</label>
+          <input
+            v-model.number="formEntrada.cantidadTerminada"
+            type="number"
+            required
+            min="1"
+            class="form-input"
+            placeholder="Cantidad"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Trabajador que Entrega *</label>
+          <select v-model="formEntrada.trabajadorEntregaId" required class="form-select">
+            <option value="">Seleccione un trabajador</option>
+            <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
+              {{ trabajador.nombre }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Trabajador que Recibe *</label>
+          <select v-model="formEntrada.trabajadorRecibeId" required class="form-select">
+            <option value="">Seleccione un trabajador</option>
+            <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
+              {{ trabajador.nombre }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Observaciones</label>
+          <textarea
+            v-model="formEntrada.observaciones"
+            class="form-input form-textarea"
+            placeholder="Observaciones opcionales..."
+            rows="2"
+          ></textarea>
+        </div>
+
+        <div class="preview-entrada" v-if="formEntrada.cantidadTerminada > 0">
+          Nuevo stock: <strong>{{ (relacionEntrada?.stock || 0) + formEntrada.cantidadTerminada }}</strong>
+        </div>
+
+        <div class="form-actions">
+          <button @click="entradaProduccionHandler" class="btn-guardar" :disabled="isGuardando || formEntrada.cantidadTerminada <= 0">
+            {{ isGuardando ? 'Registrando...' : 'Registrar Entrada' }}
+          </button>
+          <button type="button" class="btn-cancelar" @click="cerrarModalEntrada">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Salida -->
+    <div v-if="mostrarModalSalida" class="modal">
+      <div class="modal-content modal-salida">
+        <span class="close" @click="cerrarModalSalida">&times;</span>
+        <h3>Registrar Salida</h3>
+        <p>
+          <strong>{{ relacionSalida?.productoName }}</strong>
+          en <strong>{{ relacionSalida?.fincaName }}</strong>
+        </p>
+        <p class="stock-actual">Stock actual: <span class="stock-value">{{ relacionSalida?.stock }}</span></p>
+
+        <div v-if="esInsumo" class="aviso-insumo">
+          Este producto es de tipo <strong>INSUMO</strong>. Solo puede destinarse a Comedor u Otros.
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Tipo de Salida *</label>
+            <select v-model="formSalida.tipo" required class="form-select">
+              <option value="">Seleccione tipo</option>
+              <option value="VALE">Vale</option>
+              <option value="FACTURA">Factura</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Destino *</label>
+            <select v-model="formSalida.destino" required class="form-select">
+              <option value="">Seleccione destino</option>
+              <option value="TRABAJADORES" :disabled="esInsumo">Trabajadores {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
+              <option value="COMEDOR">Comedor</option>
+              <option value="VENTA_ESTADO" :disabled="esInsumo">Venta Estado {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
+              <option value="POBLACION" :disabled="esInsumo">Población {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
+              <option value="INSUMO">Insumo</option>
+              <option value="OTROS">Otros</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Items de salida -->
+        <div class="items-section">
+          <div class="items-header">
+            <h4>Items de Salida</h4>
+            <button type="button" @click="agregarItemSalida" class="btn-agregar-item">+ Agregar</button>
+          </div>
+
+          <div v-for="(item, index) in formSalida.items" :key="index" class="item-row">
+            <div class="form-group item-field">
+              <label>Trabajador *</label>
+              <select v-model="item.trabajadorId" required class="form-select">
+                <option value="">Seleccione</option>
+                <option v-for="t in trabajadores" :key="t.id" :value="t.id">
+                  {{ t.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group item-field-small">
+              <label>Cantidad *</label>
+              <input v-model.number="item.cantidad" type="number" min="1" required class="form-input" />
+            </div>
+
+            <div v-if="formSalida.destino === 'TRABAJADORES'" class="form-group item-field-checkbox">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="item.pagado" />
+                <span class="checkmark"></span>
+                Pagado
+              </label>
+            </div>
+
+            <button type="button" @click="eliminarItemSalida(index)" class="btn-eliminar-item" v-if="formSalida.items.length > 1">
+              X
+            </button>
+          </div>
+
+          <div class="total-items">
+            Total a salir: <strong>{{ calcularTotalSalida() }}</strong>
+            <span v-if="relacionSalida && calcularTotalSalida() > relacionSalida.stock" class="error-stock">
+              (Excede el stock disponible)
+            </span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Observaciones</label>
+          <textarea
+            v-model="formSalida.observaciones"
+            class="form-input form-textarea"
+            placeholder="Observaciones opcionales..."
+            rows="2"
+          ></textarea>
+        </div>
+
+        <div class="preview-salida" v-if="calcularTotalSalida() > 0 && relacionSalida && calcularTotalSalida() <= relacionSalida.stock">
+          Nuevo stock: <strong>{{ relacionSalida.stock - calcularTotalSalida() }}</strong>
+        </div>
+
+        <div class="form-actions">
+          <button @click="salidaHandler" class="btn-guardar" :disabled="isGuardando || !validarFormSalida()">
+            {{ isGuardando ? 'Registrando...' : 'Registrar Salida' }}
+          </button>
+          <button type="button" class="btn-cancelar" @click="cerrarModalSalida">Cancelar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -225,15 +399,21 @@ import { ref, computed, onMounted, watch } from 'vue'
 import FincaProductoService from '@/services/FincaProductoService'
 import FincaService from '@/services/FincaService'
 import ProductoService from '@/services/ProductoService'
+import TrabajadorService from '@/services/TrabajadorService'
+import ProduccionTerminadaService from '@/services/ProduccionTerminadaService'
+import SalidaService from '@/services/SalidaService'
 import type { FincaProducto } from '@/types/FincaProducto'
+import type { TipoSalida, DestinoSalida, ItemSalida } from '@/types/Salida'
 import type { Finca } from '@/types/Finca'
 import type { Producto } from '@/types/Producto'
+import type { Trabajador } from '@/types/Trabajador'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 
 // Estado
 const relaciones = ref<FincaProducto[]>([])
 const fincas = ref<Finca[]>([])
 const productos = ref<Producto[]>([])
+const trabajadores = ref<Trabajador[]>([])
 const isLoading = ref(false)
 const isGuardando = ref(false)
 const searchQuery = ref('')
@@ -248,6 +428,8 @@ const filtroProducto = ref('')
 const mostrarModalAsignar = ref(false)
 const mostrarModalStock = ref(false)
 const mostrarModalRemover = ref(false)
+const mostrarModalEntrada = ref(false)
+const mostrarModalSalida = ref(false)
 
 // Formularios
 const formAsignar = ref({
@@ -262,12 +444,39 @@ const formStock = ref({
 
 const relacionStock = ref<FincaProducto | null>(null)
 const relacionRemover = ref<FincaProducto | null>(null)
+const relacionEntrada = ref<FincaProducto | null>(null)
+
+const formEntrada = ref({
+  cantidadTerminada: 0,
+  trabajadorEntregaId: '',
+  trabajadorRecibeId: '',
+  observaciones: ''
+})
+
+const relacionSalida = ref<FincaProducto | null>(null)
+const formSalida = ref({
+  tipo: '' as TipoSalida | '',
+  destino: '' as DestinoSalida | '',
+  observaciones: '',
+  items: [{ trabajadorId: '', cantidad: 0, pagado: false }] as ItemSalida[]
+})
 
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
 const todosSeleccionados = computed(() => {
   return relaciones.value.length > 0 && relaciones.value.every(r => estaSeleccionado(r.id))
+})
+
+const esInsumo = computed(() => {
+  return relacionSalida.value?.productoTipo === 'INSUMO'
+})
+
+// Watcher para limpiar destino inválido cuando el producto es INSUMO
+watch([esInsumo, () => formSalida.value.destino], ([isInsumo, destino]) => {
+  if (isInsumo && ['TRABAJADORES', 'VENTA_ESTADO', 'POBLACION'].includes(destino as string)) {
+    formSalida.value.destino = ''
+  }
 })
 
 // Métodos
@@ -289,16 +498,25 @@ const cargarProductos = async () => {
   }
 }
 
+const cargarTrabajadores = async () => {
+  try {
+    const response = await TrabajadorService.getAll()
+    trabajadores.value = response.data.data || []
+  } catch (error) {
+    console.error('Error al cargar trabajadores:', error)
+  }
+}
+
 const cargarRelaciones = async () => {
   isLoading.value = true
   try {
     const filters: SearchFilter[] = []
     
     if (filtroFinca.value) {
-      filters.push({ field: 'fincaId', operator: 'eq', value: filtroFinca.value })
+      filters.push({ field: 'fincaId', operator: 'EQUALS', value: filtroFinca.value })
     }
     if (filtroProducto.value) {
-      filters.push({ field: 'productoId', operator: 'eq', value: filtroProducto.value })
+      filters.push({ field: 'productoId', operator: 'EQUALS', value: filtroProducto.value })
     }
 
     const response = await FincaProductoService.searchFincaProductos({
@@ -445,6 +663,133 @@ const removerProducto = async () => {
   }
 }
 
+// Entrada de producción
+const abrirModalEntrada = (relacion: FincaProducto) => {
+  relacionEntrada.value = relacion
+  formEntrada.value = {
+    cantidadTerminada: 0,
+    trabajadorEntregaId: '',
+    trabajadorRecibeId: '',
+    observaciones: ''
+  }
+  mostrarModalEntrada.value = true
+}
+
+const cerrarModalEntrada = () => {
+  mostrarModalEntrada.value = false
+  relacionEntrada.value = null
+  formEntrada.value = {
+    cantidadTerminada: 0,
+    trabajadorEntregaId: '',
+    trabajadorRecibeId: '',
+    observaciones: ''
+  }
+}
+
+const entradaProduccionHandler = async () => {
+  if (!relacionEntrada.value) return
+  if (formEntrada.value.cantidadTerminada <= 0) {
+    alert('La cantidad debe ser mayor a 0')
+    return
+  }
+  if (!formEntrada.value.trabajadorEntregaId) {
+    alert('Debe seleccionar el trabajador que entrega')
+    return
+  }
+  if (!formEntrada.value.trabajadorRecibeId) {
+    alert('Debe seleccionar el trabajador que recibe')
+    return
+  }
+
+  isGuardando.value = true
+  try {
+    // Crear registro de producción terminada
+    await ProduccionTerminadaService.create({
+      fincaId: relacionEntrada.value.fincaId,
+      productoId: relacionEntrada.value.productoId,
+      cantidadTerminada: formEntrada.value.cantidadTerminada,
+      trabajadorEntregaId: formEntrada.value.trabajadorEntregaId,
+      trabajadorRecibeId: formEntrada.value.trabajadorRecibeId,
+      observaciones: formEntrada.value.observaciones || undefined
+    })
+    cerrarModalEntrada()
+    cargarRelaciones()
+  } catch (error: any) {
+    console.error('Error en entrada de producción:', error)
+    alert(error.response?.data?.message || 'Error al registrar entrada de producción')
+  } finally {
+    isGuardando.value = false
+  }
+}
+
+// Salida
+const abrirModalSalida = (relacion: FincaProducto) => {
+  relacionSalida.value = relacion
+  formSalida.value = {
+    tipo: '',
+    destino: '',
+    observaciones: '',
+    items: [{ trabajadorId: '', cantidad: 0, pagado: false }]
+  }
+  mostrarModalSalida.value = true
+}
+
+const cerrarModalSalida = () => {
+  mostrarModalSalida.value = false
+  relacionSalida.value = null
+  formSalida.value = {
+    tipo: '',
+    destino: '',
+    observaciones: '',
+    items: [{ trabajadorId: '', cantidad: 0, pagado: false }]
+  }
+}
+
+const agregarItemSalida = () => {
+  formSalida.value.items.push({ trabajadorId: '', cantidad: 0, pagado: false })
+}
+
+const eliminarItemSalida = (index: number) => {
+  formSalida.value.items.splice(index, 1)
+}
+
+const calcularTotalSalida = (): number => {
+  return formSalida.value.items.reduce((sum, item) => sum + (item.cantidad || 0), 0)
+}
+
+const validarFormSalida = (): boolean => {
+  if (!formSalida.value.tipo || !formSalida.value.destino || !relacionSalida.value) return false
+  if (formSalida.value.items.length === 0) return false
+  if (formSalida.value.items.some(i => !i.trabajadorId || i.cantidad <= 0)) return false
+  if (calcularTotalSalida() > relacionSalida.value.stock) return false
+  return true
+}
+
+const salidaHandler = async () => {
+  if (!relacionSalida.value || !validarFormSalida()) {
+    alert('Por favor complete todos los campos y verifique el stock')
+    return
+  }
+
+  isGuardando.value = true
+  try {
+    await SalidaService.create({
+      tipo: formSalida.value.tipo as TipoSalida,
+      destino: formSalida.value.destino as DestinoSalida,
+      fincaProductoId: relacionSalida.value.id,
+      observaciones: formSalida.value.observaciones,
+      items: formSalida.value.items
+    })
+    cerrarModalSalida()
+    cargarRelaciones()
+  } catch (error: any) {
+    console.error('Error al registrar salida:', error)
+    alert(error.response?.data?.message || 'Error al registrar salida')
+  } finally {
+    isGuardando.value = false
+  }
+}
+
 // Exportar
 const exportarRelaciones = async () => {
   alert(`Exportando ${seleccionados.value.length} relaciones...`)
@@ -463,6 +808,7 @@ const getStockClass = (stock: number): string => {
 onMounted(() => {
   cargarFincas()
   cargarProductos()
+  cargarTrabajadores()
   cargarRelaciones()
 })
 
@@ -699,6 +1045,26 @@ h2 {
   transition: all 0.3s ease;
 }
 
+.btn-entrada {
+  background-color: #27ae60;
+  color: white;
+}
+
+.btn-entrada:hover {
+  background-color: #219a52;
+  transform: translateY(-2px);
+}
+
+.btn-salida {
+  background-color: #e74c3c;
+  color: white;
+}
+
+.btn-salida:hover {
+  background-color: #c0392b;
+  transform: translateY(-2px);
+}
+
 .btn-editar {
   background-color: #3498db;
   color: white;
@@ -839,6 +1205,151 @@ h2 {
   max-width: 400px;
 }
 
+.modal-entrada {
+  max-width: 500px;
+}
+
+.modal-salida {
+  max-width: 600px;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+/* Estilos para items de salida */
+.items-section {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 15px;
+  margin: 15px 0;
+}
+
+.items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.items-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1em;
+}
+
+.btn-agregar-item {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85em;
+  transition: all 0.3s ease;
+}
+
+.btn-agregar-item:hover {
+  background-color: #2980b9;
+}
+
+.item-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.item-field {
+  flex: 2;
+}
+
+.item-field-small {
+  flex: 1;
+  min-width: 80px;
+}
+
+.item-field-checkbox {
+  display: flex;
+  align-items: center;
+  padding-top: 20px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #27ae60;
+  white-space: nowrap;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #27ae60;
+  cursor: pointer;
+}
+
+.item-field .form-group,
+.item-field-small .form-group {
+  margin-bottom: 0;
+}
+
+.btn-eliminar-item {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.btn-eliminar-item:hover {
+  background-color: #c0392b;
+}
+
+.total-items {
+  text-align: right;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.error-stock {
+  color: #e74c3c;
+  font-weight: 600;
+  margin-left: 10px;
+}
+
+.preview-salida {
+  background-color: #fff3e0;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+  color: #e65100;
+  font-size: 0.95em;
+  text-align: center;
+}
+
 .close {
   position: absolute;
   top: 10px;
@@ -934,6 +1445,41 @@ h2 {
   gap: 10px;
   justify-content: center;
   margin-top: 20px;
+}
+
+.stock-actual {
+  color: #666;
+  margin: 10px 0;
+}
+
+.stock-value {
+  font-weight: 700;
+  color: #3498db;
+}
+
+.aviso-insumo {
+  background-color: #fff3e0;
+  border: 1px solid #ffb74d;
+  color: #e65100;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin: 10px 0;
+  font-size: 0.9em;
+}
+
+.preview-entrada {
+  background-color: #e8f5e9;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin: 15px 0;
+  color: #2e7d32;
+  font-size: 0.95em;
+  text-align: center;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 
 @media (max-width: 768px) {

@@ -1,5 +1,7 @@
 // src/types/FincaProducto.ts
 
+import type { TipoProducto } from './Producto'
+
 export interface FincaProducto {
   id: string
   fincaId: string
@@ -9,6 +11,7 @@ export interface FincaProducto {
   productoCode: string
   productoName: string
   productoPrice: number
+  productoTipo: TipoProducto
   stock: number
 }
 
@@ -41,4 +44,19 @@ export interface FincaProductoResponse {
   totalPages: number
   currentPage: number
   pageSize: number
+}
+
+export interface EntradaProduccionRequest {
+  fincaId: string
+  productoId: string
+  cantidad: number
+  descripcion?: string
+}
+
+export interface EntradaProduccionResponse {
+  fincaId: string
+  productoId: string
+  cantidadAgregada: number
+  nuevoStock: number
+  mensaje: string
 }

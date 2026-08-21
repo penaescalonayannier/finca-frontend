@@ -11,9 +11,16 @@
         class="search-input"
         @keyup.enter="buscarConReset"
       />
+
+      <select v-model="filtroEstado" @change="buscarConReset" class="filter-select">
+        <option value="activos">Solo Activos</option>
+        <option value="inactivos">Solo Inactivos</option>
+        <option value="">Todos</option>
+      </select>
+
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
       <button @click="mostrarModalCrear = true" class="btn-crear">Nuevo Producto</button>
-      <button @click="mostrarModalImportar = true" class="btn-importar">Importar CSV/Excel</button>
+      <button @click="mostrarModalImportar = true" class="btn-importar">Importar Excel</button>
       <button v-if="productosSeleccionados.length > 0" @click="exportarProductos" class="btn-exportar">
         Exportar ({{ productosSeleccionados.length }})
       </button>
@@ -34,8 +41,10 @@
           </th>
           <th>Código</th>
           <th>Nombre</th>
-          <th>Descripción</th>
+          <th>Tipo</th>
           <th>Precio</th>
+          <th>Precio Trabajador</th>
+          <th>Precio Comedor</th>
           <th>Stock</th>
           <th>Estado</th>
           <th>Acciones</th>
@@ -43,7 +52,7 @@
       </thead>
       <tbody>
         <tr v-if="productos.length === 0">
-          <td colspan="8" class="no-data">No se encontraron productos</td>
+          <td colspan="10" class="no-data">No se encontraron productos</td>
         </tr>
         <tr v-for="producto in productos" :key="producto.id">
           <td class="checkbox-col">
@@ -54,10 +63,16 @@
               class="checkbox-row"
             />
           </td>
-          <td><strong>{{ producto.code }}</strong></td>
-          <td>{{ producto.name }}</td>
-          <td class="description-cell">{{ producto.description || '-' }}</td>
-          <td class="price-cell">${{ producto.price.toFixed(2) }}</td>
+          <td :title="producto.code"><strong>{{ producto.code }}</strong></td>
+          <td :title="producto.name">{{ producto.name }}</td>
+          <td>
+            <span :class="['tipo-badge', 'tipo-' + (producto.tipoProducto?.toLowerCase() || 'otros')]">
+              {{ formatTipoProducto(producto.tipoProducto) }}
+            </span>
+          </td>
+          <td class="price-cell">${{ producto.price?.toFixed(2) || '0.00' }}</td>
+          <td class="price-cell price-trabajador">${{ producto.priceTrabajador?.toFixed(2) || '0.00' }}</td>
+          <td class="price-cell price-comedor">${{ producto.priceComedor?.toFixed(2) || '0.00' }}</td>
           <td>
             <span :class="['stock-badge', getStockClass(producto.stock)]">
               {{ producto.stock }}
@@ -146,7 +161,7 @@
           >
             <div class="drop-icon">📦</div>
             <p>Arrastre un archivo o</p>
-            <input type="file" ref="fileInput" @change="handleFileChange" accept=".csv,.xlsx,.xls" class="file-input-hidden" id="file-import" />
+            <input type="file" ref="fileInput" @change="handleFileChange" accept=".xlsx,.xls" class="file-input-hidden" id="file-import" />
             <label for="file-import" class="btn-seleccionar">Seleccionar Archivo</label>
           </div>
 
@@ -162,27 +177,31 @@
           <div v-if="mensajeImport" :class="['message', mensajeImportTipo]">
             {{ mensajeImport }}
           </div>
+
+          <div v-if="erroresImport.length > 0" class="errores-lista">
+            <p><strong>Errores:</strong></p>
+            <ul>
+              <li v-for="(error, idx) in erroresImport" :key="idx">{{ error }}</li>
+            </ul>
+          </div>
         </div>
 
         <div class="instrucciones">
-          <p><strong>Formatos:</strong> .csv, .xlsx, .xls</p>
-          <p><strong>Columnas:</strong> Código, Nombre, Descripción, Precio, Stock, Activo</p>
+          <p><strong>Formato:</strong> .xlsx, .xls</p>
+          <p><strong>Columnas (en orden):</strong></p>
+          <ul class="columnas-lista">
+            <li>A: name (requerido)</li>
+            <li>B: unidadMedida (requerido)</li>
+            <li>C: code (requerido)</li>
+            <li>D: priceTrabajador (requerido)</li>
+            <li>E: priceComedor (requerido)</li>
+            <li>F: price (requerido)</li>
+            <li>G: description (opcional)</li>
+          </ul>
         </div>
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminación</h3>
-        <p>¿Eliminar el producto <strong>{{ productoEliminar?.name }}</strong>?</p>
-        <p class="warning-text">Código: {{ productoEliminar?.code }}</p>
-        <div class="modal-buttons">
-          <button @click="eliminarProducto" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -191,11 +210,14 @@ import { ref, computed, onMounted } from 'vue'
 import ProductoService from '@/services/ProductoService'
 import CrearProducto from './CrearProducto.vue'
 import DetalleProducto from './DetalleProducto.vue'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Producto } from '@/types/Producto'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 
 const productos = ref<Producto[]>([])
 const searchQuery = ref('')
+const filtroEstado = ref('activos')
 const paginaActual = ref(0)
 const tamanoPagina = ref(10)
 const totalElementos = ref(0)
@@ -205,11 +227,9 @@ const isExportando = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const mostrarModalImportar = ref(false)
 const mostrarModalDetalle = ref(false)
 const productoEditando = ref<Producto | null>(null)
-const productoEliminar = ref<Producto | null>(null)
 const productoDetalleId = ref<string | null>(null)
 
 // Importar
@@ -219,6 +239,7 @@ const isImportando = ref(false)
 const isDragging = ref(false)
 const mensajeImport = ref('')
 const mensajeImportTipo = ref<'info' | 'success' | 'error'>('info')
+const erroresImport = ref<string[]>([])
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
@@ -231,10 +252,43 @@ const cargarProductos = async () => {
   productos.value = []
   try {
     const filters: SearchFilter[] = []
+
+    // Convertir searchQuery en filtros con CONTAINS
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'code',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'name',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'description',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
+
+    // Agregar filtro por estado si está seleccionado
+    if (filtroEstado.value) {
+      filters.push({
+        key: 'active',
+        operator: 'EQUALS',
+        value: filtroEstado.value === 'activos' ? 'true' : 'false',
+        logicalOperation: 'AND'
+      })
+    }
+
     const response = await ProductoService.buscarProductos({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value,
+      query: '',
       filter: filters,
     })
 
@@ -294,21 +348,35 @@ const editarProducto = (producto: Producto) => {
   mostrarModalEditar.value = true
 }
 
-const confirmarEliminar = (producto: Producto) => {
-  productoEliminar.value = producto
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (producto: Producto) => {
+  const confirmed = await confirmDialog.delete(
+    `${producto.name} (${producto.code})`
+  )
 
-const eliminarProducto = async () => {
-  if (!productoEliminar.value?.id) return
-  try {
-    await ProductoService.eliminarProducto(productoEliminar.value.id)
-    mostrarModalEliminar.value = false
-    productoEliminar.value = null
-    cargarProductos()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    alert('Error al eliminar el producto')
+  if (confirmed) {
+    try {
+      await ProductoService.eliminarProducto(producto.id!)
+      notify.success('Producto eliminado', 'El producto fue eliminado correctamente')
+      cargarProductos()
+    } catch (error: unknown) {
+      console.error('Error al eliminar:', error)
+      const err = error as { response?: { data?: { message?: string, errorFields?: Array<{ field: string, message: string }> } } }
+
+      let mensaje = 'Error al eliminar el producto'
+      if (err.response?.data?.errorFields?.[0]?.message) {
+        mensaje = err.response.data.errorFields[0].message
+      } else if (err.response?.data?.message) {
+        mensaje = err.response.data.message
+      }
+
+      if (mensaje.includes('related element') || mensaje.includes('cannot be deleted')) {
+        mensaje = 'No se puede eliminar: el producto está asociado a una finca'
+      } else if (mensaje.includes('not found')) {
+        mensaje = 'El producto no fue encontrado'
+      }
+
+      notify.error('Error', mensaje)
+    }
   }
 }
 
@@ -340,10 +408,12 @@ const handleDrop = (event: DragEvent) => {
 const validarArchivo = (file: File | undefined) => {
   if (!file) return
   const ext = '.' + file.name.split('.').pop()?.toLowerCase()
-  if (['.csv', '.xlsx', '.xls'].includes(ext)) {
+  if (['.xlsx', '.xls'].includes(ext)) {
     selectedFile.value = file
+    erroresImport.value = []
+    mensajeImport.value = ''
   } else {
-    alert('Formato no válido. Use CSV o Excel.')
+    notify.warning('Formato inválido', 'Use archivos Excel (.xlsx o .xls)')
   }
 }
 
@@ -356,6 +426,7 @@ const cerrarModalImportar = () => {
   mostrarModalImportar.value = false
   limpiarArchivo()
   mensajeImport.value = ''
+  erroresImport.value = []
 }
 
 const importarArchivo = async () => {
@@ -363,17 +434,30 @@ const importarArchivo = async () => {
   isImportando.value = true
   mensajeImport.value = 'Importando...'
   mensajeImportTipo.value = 'info'
+  erroresImport.value = []
 
   try {
-    const response = await ProductoService.importarCsv(selectedFile.value)
-    mensajeImport.value = response.data.message || 'Importación exitosa'
-    mensajeImportTipo.value = 'success'
-    limpiarArchivo()
-    cargarProductos()
+    const response = await ProductoService.importarExcel(selectedFile.value)
+    const { totalImportados, totalErrores, errores } = response.data
+
+    if (totalErrores > 0) {
+      mensajeImport.value = `Importación parcial: ${totalImportados} productos importados, ${totalErrores} errores`
+      mensajeImportTipo.value = totalImportados > 0 ? 'info' : 'error'
+      erroresImport.value = errores || []
+    } else {
+      mensajeImport.value = `Importación exitosa: ${totalImportados} productos importados`
+      mensajeImportTipo.value = 'success'
+      limpiarArchivo()
+    }
+
+    if (totalImportados > 0) {
+      cargarProductos()
+    }
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { message?: string } } }
-    mensajeImport.value = err.response?.data?.message || 'Error al importar'
+    const err = error as { response?: { data?: { errores?: string[], message?: string } } }
+    mensajeImport.value = err.response?.data?.message || 'Error al importar el archivo'
     mensajeImportTipo.value = 'error'
+    erroresImport.value = err.response?.data?.errores || []
   } finally {
     isImportando.value = false
   }
@@ -406,7 +490,7 @@ const toggleSeleccionarTodos = () => {
 
 const exportarProductos = async () => {
   if (productosSeleccionados.value.length === 0) {
-    alert('Selecciona al menos un producto')
+    notify.warning('Selección vacía', 'Selecciona al menos un producto')
     return
   }
 
@@ -426,7 +510,7 @@ const exportarProductos = async () => {
     productosSeleccionados.value = []
   } catch (error) {
     console.error('Error al exportar:', error)
-    alert('Error al exportar los productos')
+    notify.error('Error', 'No se pudo exportar los productos')
   } finally {
     isExportando.value = false
   }
@@ -437,6 +521,15 @@ const getStockClass = (stock: number): string => {
   if (stock <= 5) return 'stock-bajo'
   if (stock <= 15) return 'stock-medio'
   return 'stock-alto'
+}
+
+const formatTipoProducto = (tipo: string | undefined): string => {
+  const tipos: Record<string, string> = {
+    'INSUMO': 'Insumo',
+    'VENTA': 'Venta',
+    'OTROS': 'Otros'
+  }
+  return tipo ? tipos[tipo] || tipo : 'Otros'
 }
 
 onMounted(() => {
@@ -477,6 +570,23 @@ h2 {
 }
 
 .search-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.filter-select {
+  padding: 10px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: white;
+  cursor: pointer;
+  font-size: 0.95em;
+  min-width: 150px;
+  transition: all 0.3s ease;
+}
+
+.filter-select:focus {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
@@ -531,22 +641,37 @@ h2 {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  font-size: 0.9em;
 }
 
 .producto-table th, .producto-table td {
   border: 1px solid #eee;
-  padding: 12px 15px;
+  padding: 8px 10px;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
 }
 
 .producto-table th {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   font-weight: 600;
   color: #2c3e50;
-  font-size: 0.9em;
+  font-size: 0.8em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
+
+.producto-table td:nth-child(2) { max-width: 80px; } /* Código */
+.producto-table td:nth-child(3) { max-width: 120px; } /* Nombre */
+.producto-table td:nth-child(4) { max-width: 70px; } /* Tipo */
+.producto-table td:nth-child(5),
+.producto-table td:nth-child(6),
+.producto-table td:nth-child(7) { max-width: 80px; text-align: right; } /* Precios */
+.producto-table td:nth-child(8) { max-width: 60px; text-align: center; } /* Stock */
+.producto-table td:nth-child(9) { max-width: 70px; text-align: center; } /* Estado */
+.producto-table td:nth-child(10) { max-width: none; white-space: nowrap; } /* Acciones */
 
 .producto-table tr:nth-child(even) { background-color: #fafafa; }
 .producto-table tr:hover { background-color: #f0f7ff; }
@@ -564,24 +689,26 @@ h2 {
   accent-color: #3498db;
 }
 
-.description-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.price-cell {
+  font-weight: 600;
+  color: #27ae60;
+  font-size: 0.85em;
 }
 
-.price-cell {
-  font-weight: bold;
-  color: #27ae60;
+.price-trabajador {
+  color: #2980b9;
+}
+
+.price-comedor {
+  color: #8e44ad;
 }
 
 .stock-badge {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 2px 8px;
+  border-radius: 12px;
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.8em;
 }
 
 .stock-cero { background-color: #ffebee; color: #c62828; }
@@ -591,14 +718,26 @@ h2 {
 
 .status-badge {
   display: inline-block;
-  padding: 4px 14px;
-  border-radius: 20px;
+  padding: 2px 8px;
+  border-radius: 12px;
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.75em;
 }
 
 .status-badge.active { background-color: #e8f5e9; color: #2e7d32; }
 .status-badge.inactive { background-color: #f5f5f5; color: #888; }
+
+.tipo-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.75em;
+}
+
+.tipo-insumo { background-color: #e3f2fd; color: #1565c0; }
+.tipo-venta { background-color: #e8f5e9; color: #2e7d32; }
+.tipo-otros { background-color: #f5f5f5; color: #666; }
 
 .acciones {
   display: flex;
@@ -607,12 +746,12 @@ h2 {
 }
 
 .acciones button {
-  padding: 6px 12px;
+  padding: 4px 8px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.75em;
   transition: all 0.3s ease;
 }
 
@@ -762,9 +901,19 @@ h2 {
 }
 
 .modal-importar { max-width: 450px; }
-.modal-small { max-width: 350px; text-align: center; }
+.modal-small { max-width: 400px; text-align: center; }
 .modal-small h3 { margin-top: 0; color: #e74c3c; }
 .warning-text { color: #666; font-size: 0.9em; margin-top: 5px; }
+
+.error-eliminar {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 15px 0;
+  font-size: 0.9em;
+  border: 1px solid #ffcdd2;
+}
 
 .modal-buttons { 
   display: flex; 
@@ -908,6 +1057,41 @@ h2 {
 
 .instrucciones p { margin: 5px 0; }
 
+.columnas-lista {
+  margin: 8px 0 0 20px;
+  padding: 0;
+  font-size: 0.9em;
+}
+
+.columnas-lista li {
+  margin: 3px 0;
+}
+
+.errores-lista {
+  margin-top: 15px;
+  padding: 12px;
+  background-color: #ffebee;
+  border-radius: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.errores-lista p {
+  margin: 0 0 8px 0;
+  color: #c62828;
+}
+
+.errores-lista ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.errores-lista li {
+  color: #d32f2f;
+  font-size: 0.85em;
+  margin: 4px 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .producto-list {
@@ -921,6 +1105,10 @@ h2 {
   .search-input {
     min-width: 100%;
   }
+
+  .filter-select {
+    min-width: 100%;
+  }
   
   .producto-table {
     font-size: 0.85em;
@@ -931,9 +1119,6 @@ h2 {
     padding: 8px 10px;
   }
   
-  .description-cell {
-    max-width: 100px;
-  }
   
   .acciones {
     flex-direction: column;

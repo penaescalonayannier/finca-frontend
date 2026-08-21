@@ -157,18 +157,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminación</h3>
-        <p>¿Eliminar la finca <strong>{{ fincaEliminar?.name }}</strong>?</p>
-        <p class="warning-text">Código: {{ fincaEliminar?.code }}</p>
-        <div class="modal-buttons">
-          <button @click="eliminarFinca" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -177,6 +165,8 @@ import { ref, computed, onMounted } from 'vue'
 import FincaService from '@/services/FincaService'
 import CrearFinca from './CrearFinca.vue'
 import DetalleFinca from './DetalleFinca.vue'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Finca } from '@/types/Finca'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 
@@ -191,11 +181,9 @@ const isExportando = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const mostrarModalImportar = ref(false)
 const mostrarModalDetalle = ref(false)
 const fincaEditando = ref<Finca | null>(null)
-const fincaEliminar = ref<Finca | null>(null)
 const fincaDetalleId = ref<string | null>(null)
 
 // Importar
@@ -217,10 +205,27 @@ const cargarFincas = async () => {
   fincas.value = []
   try {
     const filters: SearchFilter[] = []
+
+    // Agregar filtros de búsqueda por texto
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'nombre',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'codigo',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
+
     const response = await FincaService.buscarFincas({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value,
+      query: '',
       filter: filters,
     })
 
@@ -280,21 +285,18 @@ const editarFinca = (finca: Finca) => {
   mostrarModalEditar.value = true
 }
 
-const confirmarEliminar = (finca: Finca) => {
-  fincaEliminar.value = finca
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (finca: Finca) => {
+  const confirmed = await confirmDialog.delete(`${finca.name} (${finca.code})`)
 
-const eliminarFinca = async () => {
-  if (!fincaEliminar.value?.id) return
-  try {
-    await FincaService.eliminarFinca(fincaEliminar.value.id)
-    mostrarModalEliminar.value = false
-    fincaEliminar.value = null
-    cargarFincas()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    alert('Error al eliminar la finca')
+  if (confirmed) {
+    try {
+      await FincaService.eliminarFinca(finca.id!)
+      notify.success('Finca eliminada', 'La finca fue eliminada correctamente')
+      cargarFincas()
+    } catch (error) {
+      console.error('Error al eliminar:', error)
+      notify.error('Error', 'No se pudo eliminar la finca')
+    }
   }
 }
 
@@ -329,7 +331,7 @@ const validarArchivo = (file: File | undefined) => {
   if (['.csv', '.xlsx', '.xls'].includes(ext)) {
     selectedFile.value = file
   } else {
-    alert('Formato no válido. Use CSV o Excel.')
+    notify.warning('Formato inválido', 'Use archivos CSV o Excel (.csv, .xlsx, .xls)')
   }
 }
 
@@ -392,7 +394,7 @@ const toggleSeleccionarTodos = () => {
 
 const exportarFincas = async () => {
   if (fincasSeleccionadas.value.length === 0) {
-    alert('Selecciona al menos una finca')
+    notify.warning('Selección vacía', 'Selecciona al menos una finca')
     return
   }
 
@@ -410,9 +412,10 @@ const exportarFincas = async () => {
     window.URL.revokeObjectURL(url)
 
     fincasSeleccionadas.value = []
+    notify.success('Exportación exitosa', 'Las fincas fueron exportadas correctamente')
   } catch (error) {
     console.error('Error al exportar:', error)
-    alert('Error al exportar las fincas')
+    notify.error('Error', 'No se pudo exportar las fincas')
   } finally {
     isExportando.value = false
   }

@@ -5,24 +5,61 @@
     <!-- Hero / Banner -->
     <div class="hero-section">
       <div class="hero-content">
-        <h1>🏢 Sistema de Gestión</h1>
+        <h1>🏢 Sistema de Gestión de Finca</h1>
         <p class="subtitle">Panel de control administrativo</p>
-        <div class="hero-stats">
-          <div class="stat-item">
-            <span class="stat-number">10</span>
-            <span class="stat-label">Módulos</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-number">📊</span>
-            <span class="stat-label">Gestión Completa</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-number">🚀</span>
-            <span class="stat-label">Eficiente</span>
+      </div>
+    </div>
+
+    <!-- Dashboard de Métricas -->
+    <div class="metrics-dashboard">
+      <div class="metrics-grid">
+        <div class="metric-card metric-blue" @click="$router.push('/trabajadores')">
+          <div class="metric-icon">👷</div>
+          <div class="metric-info">
+            <div class="metric-value">{{ isLoading ? '...' : metrics.trabajadores.activos }}</div>
+            <div class="metric-label">Trabajadores Activos</div>
           </div>
         </div>
+
+        <div class="metric-card metric-green" @click="$router.push('/productos')">
+          <div class="metric-icon">📦</div>
+          <div class="metric-info">
+            <div class="metric-value">{{ isLoading ? '...' : metrics.productos.total }}</div>
+            <div class="metric-label">Productos</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-teal" @click="$router.push('/fincas')">
+          <div class="metric-icon">🌾</div>
+          <div class="metric-info">
+            <div class="metric-value">{{ isLoading ? '...' : metrics.fincas.total }}</div>
+            <div class="metric-label">Fincas</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-orange" :class="{ 'metric-alert': metrics.productos.stockBajo > 0 }" @click="$router.push('/finca-productos')">
+          <div class="metric-icon">⚠️</div>
+          <div class="metric-info">
+            <div class="metric-value">{{ isLoading ? '...' : metrics.productos.stockBajo }}</div>
+            <div class="metric-label">Stock Bajo (&lt;10)</div>
+          </div>
+        </div>
+
+        <div class="metric-card metric-red" :class="{ 'metric-alert': metrics.deudas.trabajadoresConDeuda > 0 }" @click="$router.push('/deudas-trabajadores')">
+          <div class="metric-icon">💰</div>
+          <div class="metric-info">
+            <div class="metric-value">${{ isLoading ? '...' : formatCurrency(metrics.deudas.totalPendiente) }}</div>
+            <div class="metric-label">Deudas Pendientes ({{ metrics.deudas.trabajadoresConDeuda }})</div>
+          </div>
+        </div>
+
+        <router-link to="/salidas" class="metric-card metric-purple action-card">
+          <div class="metric-icon">📤</div>
+          <div class="metric-info">
+            <div class="metric-value">+</div>
+            <div class="metric-label">Nueva Salida</div>
+          </div>
+        </router-link>
       </div>
     </div>
 
@@ -56,6 +93,15 @@
               <h3>Toma de Préstamos</h3>
               <p>Registrar tomas de efectivo, suministros y seguros</p>
               <span class="card-badge">Operaciones</span>
+            </div>
+          </router-link>
+
+          <router-link to="/salidas" class="menu-card card-red">
+            <div class="card-icon">📤</div>
+            <div class="card-content">
+              <h3>Salidas (Vales/Facturas)</h3>
+              <p>Gestionar salidas de productos por vale o factura</p>
+              <span class="card-badge">Stock</span>
             </div>
           </router-link>
         </div>
@@ -182,6 +228,40 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import DashboardService, { type DashboardMetrics } from '@/services/DashboardService'
+
+const isLoading = ref(true)
+const metrics = ref<DashboardMetrics>({
+  trabajadores: { total: 0, activos: 0 },
+  productos: { total: 0, stockBajo: 0 },
+  fincas: { total: 0 },
+  deudas: { totalPendiente: 0, trabajadoresConDeuda: 0 },
+  salidas: { hoy: 0, semana: 0 },
+  produccion: { semana: 0 }
+})
+
+const formatCurrency = (value: number): string => {
+  if (value >= 1000) {
+    return (value / 1000).toFixed(1) + 'k'
+  }
+  return value.toFixed(2)
+}
+
+const loadMetrics = async () => {
+  isLoading.value = true
+  try {
+    metrics.value = await DashboardService.getMetrics()
+  } catch (error) {
+    console.error('Error loading metrics:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadMetrics()
+})
 </script>
 
 <style scoped>
@@ -220,41 +300,116 @@
   font-weight: 300;
 }
 
-.hero-stats {
+/* Metrics Dashboard */
+.metrics-dashboard {
+  max-width: 1200px;
+  margin: -30px auto 30px;
+  padding: 0 20px;
+  position: relative;
+  z-index: 10;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+}
+
+.metric-card {
   display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  text-decoration: none;
+  color: inherit;
+}
+
+.metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+.metric-icon {
+  font-size: 2em;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  gap: 30px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  padding: 15px 30px;
-  border-radius: 50px;
-  max-width: 500px;
-  margin: 0 auto;
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.metric-info {
+  flex: 1;
+  min-width: 0;
 }
 
-.stat-number {
+.metric-value {
   font-size: 1.5em;
   font-weight: 700;
-  color: #fff;
+  color: #2c3e50;
+  line-height: 1.2;
 }
 
-.stat-label {
+.metric-label {
   font-size: 0.8em;
-  color: rgba(255, 255, 255, 0.8);
+  color: #888;
   margin-top: 2px;
 }
 
-.stat-divider {
-  width: 1px;
-  height: 30px;
-  background: rgba(255, 255, 255, 0.3);
+/* Metric Colors */
+.metric-blue .metric-icon { background: #e3f2fd; }
+.metric-blue:hover { border-color: #3498db; }
+
+.metric-green .metric-icon { background: #e8f5e9; }
+.metric-green:hover { border-color: #27ae60; }
+
+.metric-teal .metric-icon { background: #e0f2f1; }
+.metric-teal:hover { border-color: #16a085; }
+
+.metric-orange .metric-icon { background: #fff3e0; }
+.metric-orange:hover { border-color: #f39c12; }
+
+.metric-red .metric-icon { background: #ffebee; }
+.metric-red:hover { border-color: #e74c3c; }
+
+.metric-purple .metric-icon { background: #f3e5f5; }
+.metric-purple:hover { border-color: #9b59b6; }
+
+.metric-alert {
+  animation: pulse 2s infinite;
+}
+
+.metric-alert .metric-value {
+  color: #e74c3c;
+}
+
+.action-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px dashed #ccc;
+}
+
+.action-card:hover {
+  border-style: solid;
+  border-color: #9b59b6;
+  background: #fff;
+}
+
+.action-card .metric-value {
+  font-size: 2em;
+  color: #9b59b6;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); }
+  50% { box-shadow: 0 4px 20px rgba(231, 76, 60, 0.3); }
 }
 
 /* Menú Grid */
@@ -422,29 +577,37 @@
 /* Responsive */
 @media (max-width: 768px) {
   .hero-content h1 {
-    font-size: 2em;
+    font-size: 1.8em;
   }
-  
-  .hero-stats {
-    flex-direction: column;
+
+  .metrics-dashboard {
+    margin-top: -20px;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
-    padding: 15px 20px;
-    border-radius: 20px;
   }
-  
-  .stat-divider {
-    width: 80%;
-    height: 1px;
+
+  .metric-card {
+    padding: 15px;
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
   }
-  
+
+  .metric-value {
+    font-size: 1.3em;
+  }
+
   .section-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .menu-card {
     padding: 20px;
   }
-  
+
   .card-icon {
     font-size: 2em;
     width: 40px;

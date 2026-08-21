@@ -8,13 +8,13 @@
       <!-- Información básica del reporte -->
       <div class="form-row">
         <div class="form-group form-group-half">
-          <label for="codigo">Código *</label>
+          <label for="codigo">Código (auto-generado)</label>
           <input
             id="codigo"
-            v-model="form.codigo"
+            :value="codigoPreview"
             type="text"
-            required
-            placeholder="Ej: REP-2026-06"
+            disabled
+            class="input-disabled input-codigo"
           />
         </div>
 
@@ -24,6 +24,20 @@
             id="fecha"
             v-model="form.fecha"
             type="date"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-half">
+          <label for="year">Año *</label>
+          <input
+            id="year"
+            v-model="form.year"
+            type="text"
+            required
+            disabled
+            class="input-disabled"
           />
         </div>
       </div>
@@ -78,17 +92,6 @@
 
       <div class="form-row">
         <div class="form-group form-group-half">
-          <label for="year">Año *</label>
-          <input
-            id="year"
-            v-model="form.year"
-            type="text"
-            required
-            placeholder="Ej: 2024"
-          />
-        </div>
-
-        <div class="form-group form-group-half">
           <label for="mes">Mes *</label>
           <select id="mes" v-model="form.mes" required class="form-select">
             <option value="">Seleccione un mes</option>
@@ -125,108 +128,13 @@
         </div>
       </div>
 
-      <!-- Sección de Días y Trabajadores -->
-      <div v-if="!isEditing" class="dias-section">
-        <div class="section-header">
-          <h4>📅 Días de Trabajo</h4>
-          <button type="button" @click="agregarDia" class="btn-agregar-dia">
-            + Agregar Día
-          </button>
-        </div>
-
-        <div v-for="(dia, diaIndex) in form.dias" :key="diaIndex" class="dia-card">
-          <div class="dia-header">
-            <h5>Día {{ diaIndex + 1 }}</h5>
-            <div class="dia-actions">
-              <button type="button" @click="eliminarDia(diaIndex)" class="btn-eliminar-dia">
-                ✕
-              </button>
-            </div>
-          </div>
-
-          <div class="dia-content">
-            <div class="form-group">
-              <label>Fecha *</label>
-              <input
-                v-model="dia.fecha"
-                type="date"
-                required
-                class="form-input"
-              />
-            </div>
-
-            <div class="trabajadores-section">
-              <div class="trabajadores-header">
-                <label>Trabajadores</label>
-                <button type="button" @click="agregarTrabajadorADia(diaIndex)" class="btn-agregar-trabajador">
-                  + Agregar Trabajador
-                </button>
-              </div>
-
-              <!-- Buscador por día -->
-              <div v-if="dia.trabajadores && dia.trabajadores.length > 0" class="search-wrapper">
-                <input
-                  v-model="dia.busqueda"
-                  type="text"
-                  class="form-input search-input"
-                  placeholder="Buscar trabajador por nombre o RUC..."
-                  @input="filtrarTrabajadoresPorDia(diaIndex)"
-                />
-              </div>
-
-              <!-- Lista de trabajadores filtrados -->
-              <template v-if="dia.trabajadores && dia.trabajadores.length > 0">
-                <div 
-                  v-for="(trabajador, trabajadorIndex) in obtenerTrabajadoresFiltrados(diaIndex)" 
-                  :key="trabajadorIndex" 
-                  class="trabajador-row"
-                >
-                  <div class="trabajador-fields">
-                    <div class="form-group">
-                      <select v-model="trabajador.trabajadorId" required class="form-select">
-                        <option value="">Seleccione trabajador</option>
-                        <option 
-                          v-for="t in trabajadoresOrdenados" 
-                          :key="t.id" 
-                          :value="t.id"
-                        >
-                          {{ t.nombre }} - {{ t.ruc }} 
-                          <span v-if="t.cargo">| {{ t.cargo }}</span>
-                        </option>
-                      </select>
-                    </div>
-
-                    <div class="form-group">
-                      <input
-                        v-model="trabajador.horas"
-                        type="text"
-                        required
-                        placeholder="Horas (ej: 8)"
-                        class="form-input"
-                      />
-                    </div>
-
-                    <div class="form-group">
-                      <input
-                        v-model="trabajador.norma"
-                        type="text"
-                        placeholder="Norma"
-                        class="form-input"
-                      />
-                    </div>
-
-                    <button type="button" @click="eliminarTrabajador(diaIndex, trabajadorIndex)" class="btn-eliminar-trabajador">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="form.dias.length === 0" class="no-dias">
-          <p>No hay días agregados. Haga clic en "Agregar Día" para comenzar.</p>
+      <!-- Mensaje informativo -->
+      <div v-if="!isEditing" class="edicion-mensaje">
+        <div class="info-box">
+          <span class="info-icon">ℹ️</span>
+          <p>
+            Para agregar días y trabajadores, primero cree el reporte y luego use la vista de <strong>Detalle del Reporte</strong>.
+          </p>
         </div>
       </div>
 
@@ -283,10 +191,32 @@ const trabajadoresOrdenados = computed(() => {
   })
 })
 
+// Código que se generará (cargado del backend)
+const codigoPreview = ref<string>('Cargando...')
+
+// Cargar el próximo código disponible
+const cargarProximoCodigo = async () => {
+  if (form.value.year && form.value.mes) {
+    try {
+      const codigo = await ReporteService.getNextCodigo(form.value.year, form.value.mes)
+      codigoPreview.value = codigo
+    } catch (error) {
+      console.error('Error al cargar código:', error)
+      codigoPreview.value = 'Error al cargar'
+    }
+  }
+}
+
 // Definir el tipo para los días con búsqueda
 interface DiaConBusqueda extends DiaTrabajo {
   busqueda: string
 }
+
+const today = new Date()
+const currentYear = today.getFullYear().toString()
+const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const currentMonth = meses[today.getMonth()]
+const currentDate = today.toISOString().split('T')[0]
 
 const form = ref<ReporteRequest & { dias: DiaConBusqueda[] }>({
   codigo: '',
@@ -294,9 +224,9 @@ const form = ref<ReporteRequest & { dias: DiaConBusqueda[] }>({
   campo: '',
   area: '',
   norma: '',
-  fecha: '',
-  year: '',
-  mes: '',
+  fecha: currentDate,
+  year: currentYear,
+  mes: currentMonth,
   trabajadorResponsableId: undefined,
   dias: []
 })
@@ -433,11 +363,7 @@ const filtrarTrabajadoresPorDia = (diaIndex: number) => {
 
 
 const guardar = async () => {
-  // Validaciones básicas del reporte
-  if (!form.value.codigo.trim()) {
-    alert('El código es obligatorio')
-    return
-  }
+  // Validaciones básicas del reporte (el código se genera automáticamente en el backend)
   if (!form.value.bloque.trim()) {
     alert('El bloque es obligatorio')
     return
@@ -540,9 +466,20 @@ watch(() => props.reporte, async () => {
   }
 }, { immediate: true })
 
+// Recargar código cuando cambie el mes
+watch(() => form.value.mes, () => {
+  if (!isEditing.value) {
+    cargarProximoCodigo()
+  }
+})
+
 onMounted(async () => {
   await cargarTrabajadores()
   await cargarDatos()
+  // Cargar el próximo código si es creación
+  if (!isEditing.value) {
+    await cargarProximoCodigo()
+  }
 })
 </script>
 
@@ -557,6 +494,7 @@ h3 {
   color: #2c3e50;
   text-align: center;
 }
+
 
 .form-row {
   display: flex;
@@ -595,6 +533,18 @@ h3 {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.input-disabled {
+  background-color: #e9ecef;
+  color: #495057;
+  cursor: not-allowed;
+}
+
+.input-codigo {
+  font-family: monospace;
+  font-weight: 600;
+  letter-spacing: 1px;
 }
 
 /* Días Section */

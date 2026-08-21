@@ -27,7 +27,7 @@ const GrupoService = {
   },
 
   // Search with pagination
-  search(page = 0, size = 10, sortBy = 'nombre', sortType: 'ASC' | 'DESC' = 'ASC') {
+  search(page = 0, size = 10, sortBy = 'nombre', sortType: 'ASC' | 'DES' = 'ASC') {
     return api.post<GrupoListResponse>('/grupo/search', {
       pageSize: size,
       page: page,

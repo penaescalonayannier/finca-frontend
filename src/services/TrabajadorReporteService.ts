@@ -17,7 +17,7 @@ interface SearchParams {
   size?: number
   page?: number
   sortBy?: string
-  sortType?: 'ASC' | 'DESC'
+  sortType?: 'ASC' | 'DES'
 }
 
 export interface TrabajadorReporteDetail {
@@ -102,8 +102,8 @@ class TrabajadorReporteService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || '',
-      sortType: filtros.sortType || 'ASC'
+      sortBy: filtros.sortBy || 'createdAt',
+      sortType: filtros.sortType || 'DES'
     }
 
     return axios.post(`${API_BASE_URL}/search`, requestBody, {

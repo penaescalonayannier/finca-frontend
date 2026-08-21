@@ -27,7 +27,7 @@ const CargoService = {
   },
 
   // Search with pagination
-  search(page = 0, size = 10, sortBy = 'name', sortType: 'ASC' | 'DESC' = 'ASC') {
+  search(page = 0, size = 10, sortBy = 'name', sortType: 'ASC' | 'DES' = 'ASC') {
     return api.post<CargoListResponse>('/cargo/search', {
       pageSize: size,
       page: page,

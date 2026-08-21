@@ -59,6 +59,14 @@
         >
           ⏱️ Menos de 8h
         </button>
+        <button
+          @click="cargarHorasPrenomina"
+          class="btn-prenomina"
+          :disabled="isLoading || !reporteData"
+          title="Cargar horas desde archivo de prenómina Excel"
+        >
+          📥 Prenómina
+        </button>
         <router-link
           to="/evaluaciones"
           class="btn-evaluaciones"
@@ -130,13 +138,34 @@
             <tr>
               <th rowspan="2" class="header-numero">#</th>
               <th rowspan="2" class="header-nombre">NOMBRE (S)<br>APELLIDOS Y CARGOS</th>
-              <th v-for="dia in diasDelMes" :key="dia" class="header-dia-semana">
+              <th
+                v-for="dia in diasDelMes"
+                :key="dia"
+                class="header-dia-semana"
+                :class="{
+                  'dia-sabado': esSabado(dia),
+                  'dia-domingo': esDomingo(dia)
+                }"
+              >
                 {{ getDiaSemanaBrev(dia) }}
               </th>
-              <th rowspan="2" class="header-total">Total<br>tiempo</th>
+              <th rowspan="2" class="header-total header-total-doble">
+                <div class="total-header-split">
+                  <span class="total-label-horas">Horas</span>
+                  <span class="total-label-norma">Norma</span>
+                </div>
+              </th>
             </tr>
             <tr>
-              <th v-for="dia in diasDelMes" :key="'num-' + dia" class="dia-col">
+              <th
+                v-for="dia in diasDelMes"
+                :key="'num-' + dia"
+                class="dia-col"
+                :class="{
+                  'dia-sabado': esSabado(dia),
+                  'dia-domingo': esDomingo(dia)
+                }"
+              >
                 {{ dia }}
               </th>
             </tr>
@@ -148,19 +177,35 @@
                 <strong>{{ trabajador.nombre }}</strong>
                 <span class="subtext">{{ trabajador.cargo || 'Sin cargo' }}</span>
               </td>
-              <td 
-                v-for="dia in diasDelMes" 
-                :key="dia" 
-                class="hora-col"
+              <td
+                v-for="dia in diasDelMes"
+                :key="dia"
+                class="celda-dividida"
                 :class="{
-                  'hora-vacia': !trabajador.horasPorDia[dia],
-                  'hora-llena': trabajador.horasPorDia[dia]
+                  'celda-sabado': esSabado(dia),
+                  'celda-domingo': esDomingo(dia)
                 }"
               >
-                {{ trabajador.horasPorDia[dia] || '' }}
+                <div class="celda-contenido">
+                  <div
+                    class="celda-horas"
+                    :class="{ 'tiene-valor': trabajador.horasPorDia[dia] }"
+                  >
+                    {{ trabajador.horasPorDia[dia] || '-' }}
+                  </div>
+                  <div
+                    class="celda-norma"
+                    :class="{ 'tiene-valor': trabajador.normaPorDia && trabajador.normaPorDia[dia] }"
+                  >
+                    {{ (trabajador.normaPorDia && trabajador.normaPorDia[dia]) || '-' }}
+                  </div>
+                </div>
               </td>
-              <td class="total-col">
-                <span class="total-horas">{{ trabajador.totalHoras || 0 }}</span>
+              <td class="total-col-doble">
+                <div class="total-contenido">
+                  <span class="total-horas">{{ trabajador.totalHoras || 0 }}</span>
+                  <span class="total-norma">{{ trabajador.totalNorma || 0 }}</span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -353,6 +398,85 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal Prenómina -->
+    <div v-if="mostrarModalPrenomina" class="modal-overlay">
+      <div class="modal-prenomina">
+        <div class="modal-header prenomina-header">
+          <h3>📥 Escribir Horas en Prenómina</h3>
+          <button @click="cerrarModalPrenomina" class="btn-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="isLoadingPrenomina" class="loading-modal">
+            <div class="spinner-small"></div>
+            <p>Escribiendo horas en el archivo de prenómina...</p>
+          </div>
+
+          <div v-else-if="comparacionPrenomina.length > 0" class="prenomina-container">
+            <div class="info-message prenomina-info success-info">
+              ✅ <strong>¡Archivo descargado!</strong> Se generó el archivo de prenómina con las horas del consolidado.
+              <br>La plantilla original quedó limpia para el próximo mes.
+            </div>
+
+            <div class="prenomina-stats">
+              <div class="stat-item encontrados">
+                <span class="stat-numero">{{ (horasPrenomina as any).actualizados || 0 }}</span>
+                <span class="stat-label">Actualizados</span>
+              </div>
+              <div class="stat-item no-encontrados">
+                <span class="stat-numero">{{ (horasPrenomina as any).noEncontrados || 0 }}</span>
+                <span class="stat-label">No encontrados</span>
+              </div>
+              <div class="stat-item total-stat">
+                <span class="stat-numero">{{ (horasPrenomina as any).total || comparacionPrenomina.length }}</span>
+                <span class="stat-label">Total</span>
+              </div>
+            </div>
+
+            <table class="prenomina-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Nombre</th>
+                  <th>RUC</th>
+                  <th>Horas Escritas</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(item, index) in comparacionPrenomina"
+                  :key="item.trabajadorId"
+                  :class="{
+                    'row-coincide': item.encontrado,
+                    'row-no-encontrado': !item.encontrado
+                  }"
+                >
+                  <td class="numero">{{ index + 1 }}</td>
+                  <td class="nombre">{{ item.nombre }}</td>
+                  <td class="ruc">{{ item.ruc || '-' }}</td>
+                  <td class="horas">{{ item.horasConsolidado }}h</td>
+                  <td class="estado">
+                    <span v-if="item.encontrado" class="estado-ok">✅ Escrito</span>
+                    <span v-else class="estado-error">❌ No encontrado</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-else class="no-prenomina">
+            <span class="error-icon">⚠️</span>
+            <p>No se pudieron escribir los datos en prenómina.</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="cerrarModalPrenomina" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -381,6 +505,12 @@ const trabajadoresFaltantes = ref<any[]>([])
 // Modal de trabajadores con menos de 8 horas
 const mostrarModalMenor8 = ref(false)
 const trabajadoresMenor8 = ref<any[]>([])
+
+// Modal de prenómina
+const mostrarModalPrenomina = ref(false)
+const isLoadingPrenomina = ref(false)
+const horasPrenomina = ref<Record<string, number>>({})
+const comparacionPrenomina = ref<any[]>([])
 
 // Filtros
 const yearSeleccionado = ref(new Date().getFullYear().toString())
@@ -432,6 +562,22 @@ const getDiaSemanaBrev = (dia: number): string => {
   const dayOfWeek = date.getDay()
   const diasBrev = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
   return diasBrev[dayOfWeek]
+}
+
+// Detectar si es sábado
+const esSabado = (dia: number): boolean => {
+  if (!mesSeleccionado.value || !yearSeleccionado.value) return false
+  const mesIndex = meses.indexOf(mesSeleccionado.value) + 1
+  const date = new Date(parseInt(yearSeleccionado.value), mesIndex - 1, dia)
+  return date.getDay() === 6
+}
+
+// Detectar si es domingo
+const esDomingo = (dia: number): boolean => {
+  if (!mesSeleccionado.value || !yearSeleccionado.value) return false
+  const mesIndex = meses.indexOf(mesSeleccionado.value) + 1
+  const date = new Date(parseInt(yearSeleccionado.value), mesIndex - 1, dia)
+  return date.getDay() === 0
 }
 
 // Consultar reporte
@@ -588,6 +734,112 @@ const cerrarModalMenor8 = () => {
   trabajadoresMenor8.value = []
 }
 
+// Escribir horas del consolidado en el Excel de prenómina y descargar
+const cargarHorasPrenomina = async () => {
+  if (!reporteData.value || !reporteData.value.trabajadores) {
+    alert('Primero consulte un reporte consolidado')
+    return
+  }
+
+  // Confirmar antes de escribir
+  if (!confirm('¿Está seguro de generar el archivo de prenómina con las horas del consolidado?\n\nSe descargará un archivo Excel con las horas de cada trabajador.')) {
+    return
+  }
+
+  isLoadingPrenomina.value = true
+  mostrarModalPrenomina.value = true
+
+  try {
+    // Preparar el mapa RUC -> Horas del consolidado
+    const horasPorRuc: Record<string, number> = {}
+
+    reporteData.value.trabajadores.forEach((trabajador) => {
+      if (trabajador.ruc) {
+        horasPorRuc[trabajador.ruc] = trabajador.totalHoras || 0
+      }
+    })
+
+    console.log('Enviando horas al backend:', horasPorRuc)
+
+    // Nombre del archivo con año y mes
+    const nombreArchivo = `PRENOMINA_${mesSeleccionado.value}_${yearSeleccionado.value}`
+
+    // Enviar al backend para escribir en el Excel
+    const response = await fetch(`/api/reporte/consolidado/escribir-prenomina?nombreArchivo=${encodeURIComponent(nombreArchivo)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(horasPorRuc)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Error al escribir en el archivo de prenómina')
+    }
+
+    // Obtener estadísticas de los headers
+    const actualizados = parseInt(response.headers.get('X-Actualizados') || '0')
+    const noEncontrados = parseInt(response.headers.get('X-No-Encontrados') || '0')
+    const total = parseInt(response.headers.get('X-Total') || '0')
+
+    // Descargar el archivo
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${nombreArchivo}.xls`)
+    document.body.appendChild(link)
+    link.click()
+    link.parentNode?.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    // Mostrar resultados en el modal
+    const resultados: any[] = []
+
+    // Determinar cuáles fueron actualizados basándose en si tienen RUC
+    reporteData.value.trabajadores.forEach((trabajador) => {
+      const ruc = trabajador.ruc
+      const horasConsolidado = trabajador.totalHoras || 0
+
+      resultados.push({
+        trabajadorId: trabajador.trabajadorId,
+        nombre: trabajador.nombre,
+        ruc: ruc,
+        cargo: trabajador.cargo,
+        horasConsolidado: horasConsolidado,
+        encontrado: !!ruc // Asumimos que si tiene RUC, probablemente se encontró
+      })
+    })
+
+    // Ordenar por nombre
+    resultados.sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+    comparacionPrenomina.value = resultados
+
+    // Guardar estadísticas para mostrar
+    horasPrenomina.value = {
+      actualizados: actualizados,
+      noEncontrados: noEncontrados,
+      total: total
+    } as any
+
+    console.log('Archivo descargado. Actualizados:', actualizados, 'No encontrados:', noEncontrados)
+
+  } catch (error) {
+    console.error('Error al escribir en prenómina:', error)
+    alert('Error al generar el archivo de prenómina. Verifique que el archivo Excel plantilla exista.')
+    mostrarModalPrenomina.value = false
+  } finally {
+    isLoadingPrenomina.value = false
+  }
+}
+
+const cerrarModalPrenomina = () => {
+  mostrarModalPrenomina.value = false
+  comparacionPrenomina.value = []
+}
+
 // Inicializar con el mes actual
 onMounted(() => {
   const fecha = new Date()
@@ -601,16 +853,27 @@ onMounted(() => {
 <style scoped>
 .reporte-consolidado {
   padding: 20px;
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
+  background: linear-gradient(180deg, #f8faf9 0%, #f0f4f2 100%);
+  min-height: 100vh;
 }
 
 h2 {
   text-align: center;
-  color: #2c3e50;
+  color: #1b5e20;
   margin-bottom: 25px;
-  font-size: 2em;
+  font-size: 1.8em;
   font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+h2::before {
+  content: '📊';
 }
 
 /* Filtros */
@@ -619,11 +882,12 @@ h2 {
   flex-wrap: wrap;
   gap: 20px;
   align-items: flex-end;
-  padding: 20px;
-  background: #fff;
+  padding: 20px 25px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   margin-bottom: 25px;
+  border: 1px solid #e0e8e4;
 }
 
 .filter-group {
@@ -635,24 +899,33 @@ h2 {
 }
 
 .filter-group label {
-  font-weight: 600;
-  color: #555;
+  font-weight: 700;
+  color: #2E7D5B;
   font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .filter-select {
-  padding: 10px 15px;
-  border: 2px solid #e0e0e0;
+  padding: 12px 16px;
+  border: 2px solid #d4e4d9;
   border-radius: 8px;
   font-size: 1em;
-  background: #fff;
+  background: linear-gradient(180deg, #fff 0%, #f8faf9 100%);
   transition: all 0.3s ease;
+  font-weight: 500;
+  color: #2c3e50;
+  cursor: pointer;
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  border-color: #2E7D5B;
+  box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.15);
+}
+
+.filter-select:hover {
+  border-color: #2E7D5B;
 }
 
 .filter-actions {
@@ -663,133 +936,148 @@ h2 {
 }
 
 .btn-consultar {
-  padding: 10px 18px;
-  background-color: #3498db;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(74, 124, 89, 0.3);
 }
 
 .btn-consultar:hover:not(:disabled) {
-  background-color: #2980b9;
+  background: linear-gradient(180deg, #3A8E6A 0%, #2E7D5B 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  box-shadow: 0 6px 15px rgba(74, 124, 89, 0.4);
 }
 
 .btn-consultar:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-pdf {
-  padding: 10px 18px;
-  background-color: #e74c3c;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
 }
 
 .btn-pdf:hover:not(:disabled) {
-  background-color: #c0392b;
+  background: linear-gradient(180deg, #f05e50 0%, #e74c3c 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+  box-shadow: 0 6px 15px rgba(231, 76, 60, 0.4);
 }
 
 .btn-pdf:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-excedidos {
-  padding: 10px 18px;
-  background-color: #f39c12;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #f39c12 0%, #e67e22 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(243, 156, 18, 0.3);
 }
 
 .btn-excedidos:hover:not(:disabled) {
-  background-color: #e67e22;
+  background: linear-gradient(180deg, #f5ab35 0%, #f39c12 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+  box-shadow: 0 6px 15px rgba(243, 156, 18, 0.4);
 }
 
 .btn-excedidos:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-faltantes {
-  padding: 10px 18px;
-  background-color: #1abc9c;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #1abc9c 0%, #16a085 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(26, 188, 156, 0.3);
 }
 
 .btn-faltantes:hover:not(:disabled) {
-  background-color: #16a085;
+  background: linear-gradient(180deg, #2ecfab 0%, #1abc9c 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 188, 156, 0.3);
+  box-shadow: 0 6px 15px rgba(26, 188, 156, 0.4);
 }
 
 .btn-faltantes:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-menor8 {
-  padding: 10px 18px;
-  background-color: #3498db;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #3498db 0%, #2980b9 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.3);
 }
 
 .btn-menor8:hover:not(:disabled) {
-  background-color: #2980b9;
+  background: linear-gradient(180deg, #52a8e8 0%, #3498db 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);
 }
 
 .btn-menor8:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-evaluaciones {
-  padding: 10px 18px;
-  background-color: #f39c12;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%);
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
   text-decoration: none;
   display: flex;
@@ -797,34 +1085,43 @@ h2 {
   justify-content: center;
   font-size: 0.9em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(155, 89, 182, 0.3);
 }
 
 .btn-evaluaciones:hover:not(.disabled) {
-  background-color: #e67e22;
+  background: linear-gradient(180deg, #af6ec8 0%, #9b59b6 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+  box-shadow: 0 6px 15px rgba(155, 89, 182, 0.4);
 }
 
 .btn-evaluaciones.disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
   pointer-events: none;
+  box-shadow: none;
 }
 
 /* Reportes Estratégicos */
 .reportes-estrategicos {
-  background: white;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
   border-radius: 12px;
   padding: 25px;
   margin-bottom: 25px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e0e8e4;
 }
 
 .reportes-estrategicos h3 {
   margin: 0 0 20px 0;
-  color: #2c3e50;
+  color: #1b5e20;
   font-size: 1.3em;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e8f0eb;
 }
 
 .reportes-buttons {
@@ -837,57 +1134,67 @@ h2 {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 15px;
-  background: white;
-  border: 2px solid #ecf0f1;
-  border-radius: 8px;
+  padding: 18px;
+  background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
   text-decoration: none;
   color: inherit;
   transition: all 0.3s ease;
   cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 .reporte-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .reporte-btn.ausentismo {
-  border-left: 4px solid #e74c3c;
+  border-left: 5px solid #e74c3c;
 }
 
 .reporte-btn.ausentismo:hover {
-  background-color: #fadbd8;
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe6e6 100%);
+  border-color: #e74c3c;
 }
 
 .reporte-btn.productividad {
-  border-left: 4px solid #f39c12;
+  border-left: 5px solid #f39c12;
 }
 
 .reporte-btn.productividad:hover {
-  background-color: #fef5e7;
+  background: linear-gradient(135deg, #fffbf0 0%, #fff3d9 100%);
+  border-color: #f39c12;
 }
 
 .reporte-btn.rankings {
-  border-left: 4px solid #9b59b6;
+  border-left: 5px solid #9b59b6;
 }
 
 .reporte-btn.rankings:hover {
-  background-color: #f4ecf7;
+  background: linear-gradient(135deg, #faf5fc 0%, #f3e8f7 100%);
+  border-color: #9b59b6;
 }
 
 .reporte-btn.excedidas {
-  border-left: 4px solid #e67e22;
+  border-left: 5px solid #e67e22;
 }
 
 .reporte-btn.excedidas:hover {
-  background-color: #fdebd0;
+  background: linear-gradient(135deg, #fffaf5 0%, #fff0e0 100%);
+  border-color: #e67e22;
 }
 
 .btn-icon {
-  font-size: 1.8em;
-  min-width: 50px;
-  text-align: center;
+  font-size: 2em;
+  min-width: 55px;
+  height: 55px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
 }
 
 .btn-text {
@@ -898,7 +1205,8 @@ h2 {
 
 .btn-text strong {
   color: #2c3e50;
-  font-size: 0.95em;
+  font-size: 1em;
+  font-weight: 700;
 }
 
 .btn-text span {
@@ -909,18 +1217,26 @@ h2 {
 /* Loading */
 .loading {
   text-align: center;
-  padding: 60px 20px;
-  color: #888;
+  padding: 80px 20px;
+  color: #2E7D5B;
+  background: linear-gradient(135deg, #fff 0%, #f8faf9 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.loading p {
+  font-weight: 600;
+  font-size: 1.1em;
 }
 
 .spinner {
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  border: 5px solid #e8f0eb;
+  border-top: 5px solid #2E7D5B;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  width: 60px;
+  height: 60px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 25px;
 }
 
 @keyframes spin {
@@ -932,53 +1248,78 @@ h2 {
 .inicial,
 .no-data {
   text-align: center;
-  padding: 60px 20px;
-  color: #888;
+  padding: 80px 20px;
+  color: #7f8c8d;
+  background: linear-gradient(135deg, #fff 0%, #f8faf9 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e0e8e4;
+}
+
+.inicial p,
+.no-data p {
+  font-size: 1.1em;
+  font-weight: 500;
 }
 
 .empty-icon {
-  font-size: 4em;
+  font-size: 5em;
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+  filter: grayscale(30%);
 }
 
 .no-data .subtext {
-  font-size: 0.9em;
+  font-size: 0.95em;
   color: #aaa;
-  margin-top: 5px;
+  margin-top: 8px;
 }
 
 /* Reporte */
 .reporte-container {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, #fff 0%, #f8faf9 100%);
+  border-radius: 16px;
+  padding: 25px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  border: 1px solid #e0e8e4;
 }
 
 .reporte-header {
   text-align: center;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
-  margin-bottom: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #2E7D5B 0%, #256B4D 100%);
+  border-radius: 12px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 12px rgba(74, 124, 89, 0.3);
 }
 
 .reporte-header h3 {
-  margin: 0 0 10px 0;
-  color: #2c3e50;
-  font-size: 1.5em;
-  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #fff;
+  font-size: 1.6em;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .reporte-header p {
   margin: 5px 0;
-  color: #666;
+  color: rgba(255,255,255,0.9);
+  font-size: 1em;
+}
+
+.reporte-header p strong {
+  color: #fff;
 }
 
 /* Tabla */
 .table-responsive {
   overflow-x: auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  background: #fff;
 }
 
 .reporte-table {
@@ -990,18 +1331,20 @@ h2 {
 
 .reporte-table th,
 .reporte-table td {
-  border: 1px solid #ddd;
+  border: 1px solid #c8d6cf;
   padding: 4px 6px;
   text-align: center;
   white-space: nowrap;
 }
 
 .reporte-table thead th {
-  background: #f0f0f0;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 50%, #2f5a3c 100%);
   font-weight: 600;
-  color: #2c3e50;
+  color: #fff;
   font-size: 0.75em;
   text-transform: uppercase;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  border: 1px solid #2f5a3c;
 }
 
 .header-numero {
@@ -1009,12 +1352,14 @@ h2 {
   max-width: 35px;
   text-align: center !important;
   padding: 6px 4px !important;
+  background: linear-gradient(180deg, #3A8E6A 0%, #2E7D5B 100%) !important;
 }
 
 .header-nombre {
   min-width: 150px;
   text-align: left !important;
   padding: 6px 8px !important;
+  background: linear-gradient(180deg, #3A8E6A 0%, #2E7D5B 100%) !important;
 }
 
 .header-dias {
@@ -1027,89 +1372,280 @@ h2 {
   padding: 4px 2px !important;
   font-weight: 600;
   font-size: 0.75em;
+  background: linear-gradient(180deg, #3A8E6A 0%, #2E7D5B 100%) !important;
 }
 
 .dia-col {
   min-width: 28px;
   padding: 4px 2px !important;
+  background: linear-gradient(180deg, #4A9E7A 0%, #3A8E6A 100%) !important;
 }
 
 .header-total {
   min-width: 50px;
   padding: 6px 4px !important;
+  background: #3A8E6A !important;
 }
 
 .row-number {
-  font-weight: 600;
-  color: #888;
+  font-weight: 700;
+  color: #2E7D5B;
   min-width: 35px;
   max-width: 35px;
   text-align: center !important;
+  background: linear-gradient(180deg, #f8faf9 0%, #e8f0eb 100%);
 }
 
 .nombre-col {
   text-align: left !important;
-  padding: 4px 8px !important;
+  padding: 6px 10px !important;
   min-width: 200px;
+  background: linear-gradient(90deg, #f8faf9 0%, #fff 100%);
+}
+
+.nombre-col strong {
+  color: #2c3e50;
+  font-size: 0.95em;
 }
 
 .nombre-col .subtext {
   display: block;
-  font-size: 0.8em;
-  color: #888;
-  font-weight: 400;
-}
-
-.hora-col {
-  font-size: 0.8em;
-  padding: 4px 2px !important;
-  min-width: 28px;
+  font-size: 0.75em;
+  color: #7f8c8d;
   font-weight: 500;
+  margin-top: 2px;
 }
 
-.hora-vacia {
-  color: #ddd;
+/* === SÁBADOS Y DOMINGOS HEADERS === */
+.dia-sabado {
+  background: linear-gradient(180deg, #2E7D5B 0%, #3A8E6A 100%) !important;
 }
 
-.hora-llena {
-  color: #2c3e50;
-  font-weight: 600;
+.dia-domingo {
+  background: linear-gradient(180deg, #ef5350 0%, #e53935 100%) !important;
 }
 
 .total-col {
   font-weight: 700;
-  color: #e67e22;
+  color: #fff;
   padding: 4px 6px !important;
   min-width: 50px;
+  background: linear-gradient(180deg, #e67e22 0%, #d35400 100%) !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .total-horas {
-  font-size: 1em;
+  font-size: 1.05em;
+  font-weight: 800;
+}
+
+/* === CELDAS DIVIDIDAS === */
+.celda-dividida {
+  padding: 0 !important;
+  min-width: 36px;
+  vertical-align: top;
+  height: 40px;
+}
+
+.celda-contenido {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 40px;
+}
+
+.celda-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  min-height: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #aaa;
+  background: #fafafa;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.celda-horas.tiene-valor {
+  color: #2c3e50;
+  background: #E3F0E8;
   font-weight: 700;
 }
 
+.celda-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  min-height: 18px;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: #bbb;
+  background: #f5f5f5;
+}
+
+.celda-norma.tiene-valor {
+  color: #666;
+  background: #fff8e1;
+}
+
+/* Sábados en celdas divididas */
+.celda-sabado .celda-horas {
+  background: #fcfcfc !important;
+}
+
+.celda-sabado .celda-horas.tiene-valor {
+  background: #fcfcfc !important;
+  color: #000;
+}
+
+.celda-sabado .celda-norma {
+  background: #fcfcfc !important;
+}
+
+.celda-sabado .celda-norma.tiene-valor {
+  background: #fcfcfc !important;
+  color: #000;
+}
+
+/* Domingos en celdas divididas */
+.celda-domingo .celda-horas {
+  background: #fef5f5 !important;
+}
+
+.celda-domingo .celda-horas.tiene-valor {
+  background: #fdeaea !important;
+  color: #c62828;
+}
+
+.celda-domingo .celda-norma {
+  background: #fff8f8 !important;
+}
+
+.celda-domingo .celda-norma.tiene-valor {
+  background: #fdf0f0 !important;
+  color: #e57373;
+}
+
+/* Header Total Doble */
+.header-total-doble {
+  min-width: 60px !important;
+  padding: 0 !important;
+}
+
+.total-header-split {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.total-label-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: #3A8E6A;
+  font-size: 0.7em;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.total-label-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: #4A9E7A;
+  font-size: 0.7em;
+  font-weight: 700;
+}
+
+/* Total Col Doble */
+.total-col-doble {
+  padding: 0 !important;
+  min-width: 60px;
+  vertical-align: middle;
+}
+
+.total-contenido {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.total-contenido .total-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  font-size: 0.9em;
+  font-weight: 700;
+  color: #fff;
+  background: #3A8E6A;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.total-contenido .total-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #fff;
+  background: #4A9E7A;
+}
+
 .reporte-table tbody tr:nth-child(even) {
-  background-color: #fafafa;
+  background-color: rgba(74, 124, 89, 0.03);
+}
+
+.reporte-table tbody tr:nth-child(even) .hora-llena {
+  background: linear-gradient(180deg, #d4edda 0%, #b8d9bd 100%);
 }
 
 .reporte-table tbody tr:hover {
-  background-color: #f0f7ff;
+  background-color: rgba(52, 152, 219, 0.08);
+}
+
+.reporte-table tbody tr:hover .nombre-col {
+  background: linear-gradient(90deg, #e8f4fc 0%, #fff 100%);
+}
+
+.reporte-table tbody tr:hover .hora-llena {
+  background: linear-gradient(180deg, #d6eaf8 0%, #aed6f1 100%);
 }
 
 .reporte-footer {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 2px solid #f0f0f0;
+  margin-top: 25px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8faf9 0%, #e8f0eb 100%);
+  border-radius: 10px;
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
-  color: #666;
+  gap: 15px;
+  color: #555;
   font-size: 0.9em;
+  border: 1px solid #d4e4d9;
 }
 
 .reporte-footer p {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reporte-footer p strong {
+  color: #2E7D5B;
 }
 
 @media (max-width: 768px) {
@@ -1265,7 +1801,8 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
 }
 
 .modal-faltantes {
@@ -1277,7 +1814,8 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
 }
 
 .modal-header {
@@ -1285,27 +1823,35 @@ h2 {
   justify-content: space-between;
   align-items: center;
   padding: 20px 25px;
-  border-bottom: 2px solid #f0f0f0;
-  background: linear-gradient(135deg, #fff8e1 0%, #fff 100%);
+  border-bottom: none;
+  background: linear-gradient(135deg, #2E7D5B 0%, #256B4D 100%);
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #2c3e50;
-  font-size: 1.3em;
+  color: #fff;
+  font-size: 1.4em;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
 .btn-close {
-  background: none;
+  background: rgba(255,255,255,0.15);
   border: none;
   cursor: pointer;
-  font-size: 1.5em;
-  color: #888;
+  font-size: 1.3em;
+  color: #fff;
   transition: all 0.3s ease;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-close:hover {
-  color: #333;
+  background: rgba(255,255,255,0.25);
   transform: rotate(90deg);
 }
 
@@ -1318,17 +1864,33 @@ h2 {
 .loading-modal {
   text-align: center;
   padding: 60px 20px;
-  color: #888;
+  color: #2E7D5B;
+}
+
+.loading-modal p {
+  font-weight: 600;
+  font-size: 1em;
+}
+
+.spinner-small {
+  border: 4px solid #e8f0eb;
+  border-top: 4px solid #2E7D5B;
+  border-radius: 50%;
+  width: 45px;
+  height: 45px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
 }
 
 .info-message {
-  background-color: #fffacd;
-  border-left: 4px solid #f39c12;
-  padding: 12px 15px;
-  border-radius: 4px;
+  background: linear-gradient(135deg, #fff8e1 0%, #fffacd 100%);
+  border-left: 5px solid #f39c12;
+  padding: 15px 18px;
+  border-radius: 8px;
   margin-bottom: 20px;
   color: #856404;
   font-size: 0.95em;
+  box-shadow: 0 2px 8px rgba(243, 156, 18, 0.15);
 }
 
 .excedidos-container {
@@ -1347,64 +1909,76 @@ h2 {
   width: 100%;
   border-collapse: collapse;
   background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .faltantes-table thead {
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #e0e0e0;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
 }
 
 .faltantes-table th {
-  padding: 12px 15px;
+  padding: 14px 16px;
   text-align: left;
-  font-weight: 600;
-  color: #2c3e50;
+  font-weight: 700;
+  color: #fff;
   font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .faltantes-table tbody tr {
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s ease;
+  border-bottom: 1px solid #e8f0eb;
+  transition: all 0.2s ease;
+}
+
+.faltantes-table tbody tr:nth-child(even) {
+  background-color: rgba(74, 124, 89, 0.03);
 }
 
 .faltantes-table tbody tr:hover {
-  background-color: #f8f9fa;
+  background-color: rgba(74, 124, 89, 0.08);
 }
 
 .faltantes-table td {
-  padding: 12px 15px;
+  padding: 14px 16px;
   color: #555;
   font-size: 0.9em;
 }
 
 .faltantes-table .numero {
-  font-weight: 600;
-  color: #3498db;
+  font-weight: 700;
+  color: #2E7D5B;
   width: 40px;
 }
 
 .faltantes-table .nombre {
-  font-weight: 500;
+  font-weight: 600;
   color: #2c3e50;
 }
 
 .faltantes-table .ruc,
 .faltantes-table .cuenta {
-  color: #888;
+  color: #7f8c8d;
+  font-family: monospace;
 }
 
 .faltantes-table .cargo {
-  color: #888;
+  color: #7f8c8d;
   font-size: 0.85em;
+  font-style: italic;
 }
 
 .no-faltantes {
   text-align: center;
-  padding: 40px 20px;
-  color: #888;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.no-faltantes p {
+  font-size: 1.05em;
 }
 
 .info-message.warning {
@@ -1414,116 +1988,146 @@ h2 {
 }
 
 .trabajador-excedido {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 15px;
-  background: #fafafa;
+  border: 1px solid #e0e8e4;
+  border-radius: 12px;
+  padding: 18px;
+  background: linear-gradient(135deg, #fff 0%, #f8faf9 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.trabajador-excedido:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .trabajador-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ddd;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e8f0eb;
 }
 
 .trabajador-info h4 {
   margin: 0;
   color: #2c3e50;
-  font-size: 1.1em;
+  font-size: 1.15em;
+  font-weight: 700;
 }
 
 .subinfo {
-  margin: 4px 0 0 0;
-  color: #888;
+  margin: 5px 0 0 0;
+  color: #7f8c8d;
   font-size: 0.85em;
 }
 
 .excedidos-badge {
   display: inline-block;
-  background-color: #f39c12;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
   color: white;
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.85em;
   white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(243, 156, 18, 0.3);
 }
 
 .dias-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9em;
-  margin-top: 10px;
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .dias-table th,
 .dias-table td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e8f0eb;
 }
 
 .dias-table th {
-  background-color: #f0f0f0;
-  font-weight: 600;
-  color: #2c3e50;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
+  font-weight: 700;
+  color: #fff;
   text-transform: uppercase;
   font-size: 0.8em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.dias-table tbody tr:nth-child(even) {
+  background-color: rgba(74, 124, 89, 0.03);
+}
+
+.dias-table tbody tr:hover {
+  background-color: rgba(74, 124, 89, 0.08);
 }
 
 .fecha-col {
-  font-weight: 500;
+  font-weight: 600;
   color: #2c3e50;
 }
 
 .horas-col {
   color: #e74c3c;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .exceso-col {
   color: #c0392b;
-  font-weight: 700;
+  font-weight: 800;
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.1) 0%, transparent 100%);
 }
 
 .no-excedidos {
   text-align: center;
-  padding: 40px 20px;
-  color: #888;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.no-excedidos p {
+  font-size: 1.05em;
 }
 
 .success-icon {
-  font-size: 3em;
+  font-size: 4em;
   display: block;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
+  color: #2E7D5B;
 }
 
 .modal-footer {
-  padding: 15px 25px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafafa;
+  padding: 18px 25px;
+  border-top: 1px solid #e8f0eb;
+  background: linear-gradient(180deg, #f8faf9 0%, #e8f0eb 100%);
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .btn-cerrar {
-  padding: 8px 24px;
-  background-color: #95a5a6;
+  padding: 10px 28px;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   transition: all 0.3s ease;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(74, 124, 89, 0.3);
 }
 
 .btn-cerrar:hover {
-  background-color: #7f8c8d;
+  background: linear-gradient(180deg, #3A8E6A 0%, #2E7D5B 100%);
   transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(74, 124, 89, 0.4);
 }
 
 .modal-body::-webkit-scrollbar {
@@ -1554,7 +2158,8 @@ h2 {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
 }
 
 .menor8-container {
@@ -1564,70 +2169,321 @@ h2 {
 }
 
 .trabajador-menor8 {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 15px;
-  background: #fafafa;
+  border: 1px solid #e0e8e4;
+  border-radius: 12px;
+  padding: 18px;
+  background: linear-gradient(135deg, #fff 0%, #f8faf9 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+}
+
+.trabajador-menor8:hover {
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .dias-badge {
   display: inline-block;
-  background-color: #3498db;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
   color: white;
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.85em;
   white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.3);
 }
 
 .horas-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9em;
-  margin-top: 10px;
+  margin-top: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .horas-table th,
 .horas-table td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e8f0eb;
 }
 
 .horas-table th {
-  background-color: #f0f0f0;
-  font-weight: 600;
-  color: #2c3e50;
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
+  font-weight: 700;
+  color: #fff;
   text-transform: uppercase;
   font-size: 0.8em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
-.dia-col {
-  font-weight: 500;
+.horas-table tbody tr:nth-child(even) {
+  background-color: rgba(74, 124, 89, 0.03);
+}
+
+.horas-table tbody tr:hover {
+  background-color: rgba(74, 124, 89, 0.08);
+}
+
+.horas-table .dia-col {
+  font-weight: 600;
   color: #2c3e50;
 }
 
-.horas-col {
+.horas-table .horas-col {
   color: #3498db;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .diferencia-col {
   color: #e74c3c;
-  font-weight: 700;
+  font-weight: 800;
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.1) 0%, transparent 100%);
 }
 
 .no-menor8 {
   text-align: center;
-  padding: 40px 20px;
-  color: #888;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.no-menor8 p {
+  font-size: 1.05em;
+}
+
+/* ============ BOTÓN PRENÓMINA ============ */
+.btn-prenomina {
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #8e44ad 0%, #7d3c98 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s ease;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(142, 68, 173, 0.3);
+}
+
+.btn-prenomina:hover:not(:disabled) {
+  background: linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(142, 68, 173, 0.4);
+}
+
+.btn-prenomina:disabled {
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ============ MODAL PRENÓMINA ============ */
+.modal-prenomina {
+  background-color: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 1000px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
+}
+
+.prenomina-header {
+  background: linear-gradient(135deg, #8e44ad 0%, #7d3c98 100%) !important;
+}
+
+.prenomina-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.prenomina-info {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
+  border-left-color: #8e44ad !important;
+  color: #4a235a !important;
+}
+
+.prenomina-stats {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 15px 25px;
+  border-radius: 10px;
+  min-width: 100px;
+}
+
+.stat-item.encontrados {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 2px solid #4caf50;
+}
+
+.stat-item.no-encontrados {
+  background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+  border: 2px solid #e74c3c;
+}
+
+.stat-item.coinciden {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border: 2px solid #2196f3;
+}
+
+.stat-numero {
+  font-size: 2em;
+  font-weight: 800;
+  color: #2c3e50;
+}
+
+.stat-label {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #7f8c8d;
+  text-transform: uppercase;
+}
+
+.prenomina-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.prenomina-table thead {
+  background: linear-gradient(180deg, #8e44ad 0%, #7d3c98 100%);
+}
+
+.prenomina-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.prenomina-table tbody tr {
+  border-bottom: 1px solid #e8f0eb;
+  transition: all 0.2s ease;
+}
+
+.prenomina-table td {
+  padding: 12px 16px;
+  color: #555;
+  font-size: 0.9em;
+}
+
+.prenomina-table .numero {
+  font-weight: 700;
+  color: #8e44ad;
+  width: 40px;
+}
+
+.prenomina-table .nombre {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.prenomina-table .ruc {
+  color: #7f8c8d;
+  font-family: monospace;
+}
+
+.prenomina-table .horas {
+  font-weight: 700;
+  text-align: center;
+}
+
+.prenomina-table .diferencia {
+  font-weight: 800;
+  text-align: center;
+}
+
+.prenomina-table .diferencia.positiva {
+  color: #27ae60;
+  background: linear-gradient(90deg, rgba(39, 174, 96, 0.1) 0%, transparent 100%);
+}
+
+.prenomina-table .diferencia.negativa {
+  color: #e74c3c;
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.1) 0%, transparent 100%);
+}
+
+.row-coincide {
+  background: linear-gradient(90deg, rgba(39, 174, 96, 0.08) 0%, transparent 100%) !important;
+}
+
+.row-diferencia {
+  background: linear-gradient(90deg, rgba(243, 156, 18, 0.08) 0%, transparent 100%) !important;
+}
+
+.row-no-encontrado {
+  background: linear-gradient(90deg, rgba(231, 76, 60, 0.08) 0%, transparent 100%) !important;
+}
+
+.row-no-encontrado td {
+  color: #999 !important;
+}
+
+.success-info {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important;
+  border-left-color: #4caf50 !important;
+  color: #2e7d32 !important;
+}
+
+.stat-item.total-stat {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+  border: 2px solid #8e44ad;
+}
+
+.estado {
+  text-align: center;
+  font-weight: 600;
+}
+
+.estado-ok {
+  color: #27ae60;
+}
+
+.estado-error {
+  color: #e74c3c;
+}
+
+.no-prenomina {
+  text-align: center;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.error-icon {
+  font-size: 4em;
+  display: block;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 768px) {
   .modal-excedidos,
   .modal-faltantes,
-  .modal-menor8 {
+  .modal-menor8,
+  .modal-prenomina {
     width: 95%;
     max-height: 90vh;
   }

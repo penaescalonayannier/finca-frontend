@@ -75,15 +75,36 @@
             <thead>
               <tr class="header-row">
                 <th rowspan="2" class="col-nombre">Trabajador</th>
-                <th rowspan="2" class="col-ruc">RUC</th>
-                <th rowspan="2" class="col-cargo">Cargo</th>
-                <th v-for="dia in daysInMonth" :key="dia" class="header-dia-semana" :title="`Día ${dia}`">
+                <th
+                  v-for="dia in daysInMonth"
+                  :key="dia"
+                  class="header-dia-semana"
+                  :class="{
+                    'dia-sabado': esSabado(dia),
+                    'dia-domingo': esDomingo(dia)
+                  }"
+                  :title="`Día ${dia}`"
+                >
                   {{ getDiaSemanaBrev(dia) }}
                 </th>
-                <th rowspan="2" class="col-total">Total</th>
+                <th rowspan="2" class="col-total-header">
+                  <div class="total-header-split">
+                    <span class="total-label-horas">Horas</span>
+                    <span class="total-label-norma">Norma</span>
+                  </div>
+                </th>
               </tr>
               <tr class="header-row">
-                <th v-for="dia in daysInMonth" :key="'num-' + dia" class="col-dia" :title="`Día ${dia}`">
+                <th
+                  v-for="dia in daysInMonth"
+                  :key="'num-' + dia"
+                  class="col-dia-num"
+                  :class="{
+                    'dia-sabado': esSabado(dia),
+                    'dia-domingo': esDomingo(dia)
+                  }"
+                  :title="`Día ${dia}`"
+                >
                   {{ dia }}
                 </th>
               </tr>
@@ -92,23 +113,54 @@
               <tr v-for="trabajador in responsable.trabajadores" :key="trabajador.trabajadorId" class="data-row">
                 <td class="col-nombre">
                   <strong>{{ trabajador.nombre }}</strong>
+                  <span class="cargo-subtexto">{{ trabajador.cargo || 'Sin cargo' }}</span>
                 </td>
-                <td class="col-ruc">{{ trabajador.ruc || '-' }}</td>
-                <td class="col-cargo">{{ trabajador.cargo || '-' }}</td>
-                <td v-for="dia in daysInMonth" :key="dia" class="col-dia horas">
-                  {{ trabajador.horasPorDia[dia] || '-' }}
+                <td
+                  v-for="dia in daysInMonth"
+                  :key="dia"
+                  class="celda-dividida"
+                  :class="{
+                    'celda-sabado': esSabado(dia),
+                    'celda-domingo': esDomingo(dia)
+                  }"
+                >
+                  <div class="celda-contenido">
+                    <div
+                      class="celda-horas"
+                      :class="{ 'tiene-valor': trabajador.horasPorDia[dia] }"
+                    >
+                      {{ trabajador.horasPorDia[dia] || '-' }}
+                    </div>
+                    <div
+                      class="celda-norma"
+                      :class="{ 'tiene-valor': trabajador.normaPorDia && trabajador.normaPorDia[dia] }"
+                    >
+                      {{ (trabajador.normaPorDia && trabajador.normaPorDia[dia]) || '-' }}
+                    </div>
+                  </div>
                 </td>
-                <td class="col-total total-horas">
-                  <strong>{{ trabajador.totalHoras.toFixed(1) }}</strong>
+                <td class="col-total-doble">
+                  <div class="total-contenido">
+                    <span class="total-horas">{{ trabajador.totalHoras.toFixed(1) }}</span>
+                    <span class="total-norma">{{ trabajador.totalNorma?.toFixed(1) || '0' }}</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
             <tfoot>
               <tr class="footer-row">
-                <td colspan="3" class="col-label">
-                  <strong>Total Horas por Día</strong>
+                <td class="col-label">
+                  <strong>Total por Día</strong>
                 </td>
-                <td v-for="dia in daysInMonth" :key="dia" class="col-dia total-dia">
+                <td
+                  v-for="dia in daysInMonth"
+                  :key="dia"
+                  class="col-dia total-dia"
+                  :class="{
+                    'celda-sabado': esSabado(dia),
+                    'celda-domingo': esDomingo(dia)
+                  }"
+                >
                   <strong>{{ calcularTotalDia(responsable.trabajadores, dia) }}</strong>
                 </td>
                 <td class="col-total total-general">
@@ -198,17 +250,33 @@ const daysInMonth = computed(() => {
   return new Date(year, monthNum, 0).getDate()
 })
 
+// Mapa de meses
+const monthMap: Record<string, number> = {
+  'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4, 'Mayo': 5, 'Junio': 6,
+  'Julio': 7, 'Agosto': 8, 'Septiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12
+}
+
 // Obtener inicial del día de la semana
 const getDiaSemanaBrev = (dia: number): string => {
-  const monthMap: Record<string, number> = {
-    'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4, 'Mayo': 5, 'Junio': 6,
-    'Julio': 7, 'Agosto': 8, 'Septiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12
-  }
   const monthNum = monthMap[mesSeleccionado.value] || 1
   const date = new Date(parseInt(yearSeleccionado.value), monthNum - 1, dia)
   const dayOfWeek = date.getDay()
   const diasBrev = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
   return diasBrev[dayOfWeek]
+}
+
+// Detectar si es sábado
+const esSabado = (dia: number): boolean => {
+  const monthNum = monthMap[mesSeleccionado.value] || 1
+  const date = new Date(parseInt(yearSeleccionado.value), monthNum - 1, dia)
+  return date.getDay() === 6
+}
+
+// Detectar si es domingo
+const esDomingo = (dia: number): boolean => {
+  const monthNum = monthMap[mesSeleccionado.value] || 1
+  const date = new Date(parseInt(yearSeleccionado.value), monthNum - 1, dia)
+  return date.getDay() === 0
 }
 
 // Métodos
@@ -337,18 +405,21 @@ onMounted(() => {
 <style scoped>
 .consolidado-responsable {
   padding: 20px;
-  background: #f5f7fa;
+  background: linear-gradient(180deg, #f8faf9 0%, #f0f4f2 100%);
   min-height: 100vh;
 }
 
 .header-section {
-  margin-bottom: 30px;
+  margin-bottom: 25px;
+  text-align: center;
 }
 
 .header-section h2 {
-  margin: 0 0 5px 0;
-  color: #2c3e50;
+  margin: 0 0 8px 0;
+  color: #37474f;
   font-size: 1.8em;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .subtitle {
@@ -360,82 +431,102 @@ onMounted(() => {
 /* Filtros */
 .filters {
   display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-  background: white;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   flex-wrap: wrap;
+  gap: 20px;
   align-items: flex-end;
+  padding: 20px 25px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8faf9 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+  margin-bottom: 25px;
+  border: 1px solid #e0e8e4;
 }
 
 .filter-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  flex: 1;
+  min-width: 120px;
 }
 
 .filter-group label {
-  font-weight: 500;
-  color: #555;
+  font-weight: 700;
+  color: #546e7a;
   font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .filter-select {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9em;
-  background: white;
+  padding: 12px 16px;
+  border: 2px solid #cfd8dc;
+  border-radius: 8px;
+  font-size: 1em;
+  background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+  transition: all 0.3s ease;
+  font-weight: 500;
+  color: #37474f;
   cursor: pointer;
-  min-width: 120px;
 }
 
 .filter-select:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  border-color: #78909c;
+  box-shadow: 0 0 0 3px rgba(120, 144, 156, 0.15);
+}
+
+.filter-select:hover {
+  border-color: #78909c;
 }
 
 .filter-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .btn-consultar,
 .btn-pdf {
-  padding: 8px 16px;
+  padding: 12px 20px;
   border: none;
-  border-radius: 4px;
-  font-weight: 600;
+  border-radius: 8px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
   font-size: 0.9em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .btn-consultar {
-  background-color: #3498db;
+  background: linear-gradient(180deg, #607d8b 0%, #546e7a 100%);
   color: white;
+  box-shadow: 0 2px 6px rgba(96, 125, 139, 0.3);
 }
 
 .btn-consultar:hover:not(:disabled) {
-  background-color: #2980b9;
+  background: linear-gradient(180deg, #78909c 0%, #607d8b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(96, 125, 139, 0.4);
 }
 
 .btn-pdf {
-  background-color: #27ae60;
+  background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
   color: white;
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
 }
 
 .btn-pdf:hover:not(:disabled) {
-  background-color: #219a52;
+  background: linear-gradient(180deg, #f05e50 0%, #e74c3c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(231, 76, 60, 0.4);
 }
 
 .btn-consultar:disabled,
 .btn-pdf:disabled {
-  background-color: #bdc3c7;
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* Loading */
@@ -445,19 +536,25 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  background: white;
-  border-radius: 8px;
-  color: #7f8c8d;
+  background: linear-gradient(135deg, #fff 0%, #fafafa 100%);
+  border-radius: 16px;
+  color: #607d8b;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+}
+
+.loading p {
+  font-weight: 600;
+  font-size: 1.1em;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid #ecf0f1;
-  border-top-color: #3498db;
+  width: 60px;
+  height: 60px;
+  border: 5px solid #E3F0E8;
+  border-top-color: #2E7D5B;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 20px;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 25px;
 }
 
 @keyframes spin {
@@ -477,37 +574,38 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: white;
-  padding: 15px 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #2E7D5B 0%, #3A8E6A 100%);
+  padding: 18px 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(102, 187, 106, 0.3);
   margin-bottom: 10px;
 }
 
 .period {
-  font-size: 1.1em;
-  font-weight: 600;
-  color: #2c3e50;
+  font-size: 1.2em;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .total {
-  font-size: 0.9em;
-  color: #7f8c8d;
+  font-size: 0.95em;
+  color: rgba(255,255,255,0.9);
 }
 
 /* Responsable Section */
 .responsable-section {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(180deg, #fff 0%, #f8faf9 100%);
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 25px;
+  border: 1px solid #e0e8e4;
 }
 
 .responsable-header {
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 2px solid #e0e0e0;
+  padding: 18px 25px;
+  background: linear-gradient(135deg, #2E7D5B 0%, #3A8E6A 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -517,33 +615,36 @@ onMounted(() => {
 .responsable-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 15px;
   flex: 1;
 }
 
 .responsable-header h3 {
   margin: 0;
-  color: #2c3e50;
-  font-size: 1.1em;
+  color: #fff;
+  font-size: 1.15em;
+  font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
 .badge {
   display: inline-block;
-  background: #3498db;
+  background: rgba(255,255,255,0.2);
   color: white;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 5px 12px;
+  border-radius: 20px;
   font-size: 0.85em;
   font-weight: 600;
   white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.3);
 }
 
 .btn-pdf-responsable {
-  padding: 8px 16px;
-  background-color: #27ae60;
+  padding: 10px 18px;
+  background: rgba(255,255,255,0.15);
   color: white;
-  border: none;
-  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
   font-size: 0.85em;
@@ -552,19 +653,24 @@ onMounted(() => {
 }
 
 .btn-pdf-responsable:hover:not(:disabled) {
-  background-color: #219a52;
+  background: rgba(255,255,255,0.25);
   transform: translateY(-2px);
-  box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .btn-pdf-responsable:disabled {
-  background-color: #bdc3c7;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* Tabla */
 .table-wrapper {
   overflow-x: auto;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background: #fff;
+  margin: 15px;
+  margin-top: 20px;
 }
 
 .consolidado-table {
@@ -573,98 +679,282 @@ onMounted(() => {
 }
 
 .consolidado-table thead {
-  background-color: #34495e;
+  background: linear-gradient(180deg, #2E7D5B 0%, #3A8E6A 100%);
   color: white;
-  position: sticky;
-  top: 0;
 }
 
 .consolidado-table th {
-  padding: 10px;
+  padding: 10px 8px;
   text-align: center;
   font-weight: 600;
-  font-size: 0.85em;
+  font-size: 0.8em;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.15);
+  border: 1px solid #256B4D;
 }
 
 .col-nombre {
-  text-align: left;
-  min-width: 150px;
+  text-align: left !important;
+  min-width: 180px;
+  padding-left: 12px !important;
 }
 
-.col-ruc,
-.col-cargo {
-  min-width: 80px;
-}
-
-.col-dia {
-  width: 35px;
+.col-dia-num {
+  width: 36px;
+  min-width: 36px;
+  background: linear-gradient(180deg, #B8D8C5 0%, #2E7D5B 100%) !important;
 }
 
 .header-dia-semana {
   text-align: center;
   padding: 4px 2px !important;
-  font-weight: 600;
-  font-size: 0.85em;
+  font-weight: 700;
+  font-size: 0.75em;
+  background: linear-gradient(180deg, #2E7D5B 0%, #3A8E6A 100%) !important;
 }
 
-.col-total {
+/* Sábados y Domingos Headers */
+.dia-sabado {
+  background: linear-gradient(180deg, #2E7D5B 0%, #3A8E6A 100%) !important;
+}
+
+.dia-domingo {
+  background: linear-gradient(180deg, #ef5350 0%, #e53935 100%) !important;
+}
+
+.col-total-header {
   min-width: 60px;
+  padding: 0 !important;
+  background: #3A8E6A !important;
+}
+
+.total-header-split {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.total-label-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: #3A8E6A;
+  font-size: 0.7em;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.total-label-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: #2E7D5B;
+  font-size: 0.7em;
+  font-weight: 700;
 }
 
 .consolidado-table td {
-  padding: 8px;
+  padding: 6px 8px;
   text-align: center;
-  border-bottom: 1px solid #ecf0f1;
-  font-size: 0.9em;
+  border: 1px solid #e0e8e4;
+  font-size: 0.85em;
+}
+
+.consolidado-table tbody tr:nth-child(even) {
+  background-color: rgba(74, 124, 89, 0.03);
 }
 
 .consolidado-table tbody tr:hover {
-  background-color: #f8f9fa;
+  background-color: rgba(52, 152, 219, 0.08);
 }
 
 .consolidado-table .data-row .col-nombre {
   text-align: left;
   color: #2c3e50;
+  background: linear-gradient(90deg, #f8faf9 0%, #fff 100%);
+  vertical-align: middle;
 }
 
-.consolidado-table .horas {
+.consolidado-table .data-row .col-nombre strong {
+  font-size: 0.9em;
+  display: block;
+  line-height: 1.2;
+}
+
+.cargo-subtexto {
+  display: block;
+  font-size: 0.7em;
+  color: #2E7D5B;
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+/* === CELDAS DIVIDIDAS === */
+.celda-dividida {
+  padding: 0 !important;
+  min-width: 40px;
+  vertical-align: top;
+  height: 50px;
+}
+
+.celda-contenido {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 50px;
+}
+
+.celda-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px;
+  min-height: 25px;
   font-size: 0.85em;
-  color: #555;
+  font-weight: 600;
+  color: #ccc;
+  background: #fafafa;
+  border-bottom: 1px solid #eee;
 }
 
-.consolidado-table .total-horas {
-  background-color: #e8f5e9;
+.celda-horas.tiene-valor {
+  color: #555;
+  background: #f5f9f6;
+  font-weight: 700;
+}
+
+.celda-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px;
+  min-height: 22px;
+  font-size: 0.75em;
   font-weight: 600;
-  color: #27ae60;
+  color: #ccc;
+  background: #f8f8f8;
+}
+
+.celda-norma.tiene-valor {
+  color: #777;
+  background: #fafaf5;
+}
+
+/* Sábados en celdas divididas */
+.celda-sabado .celda-horas {
+  background: #fcfcfc !important;
+}
+
+.celda-sabado .celda-horas.tiene-valor {
+  background: #fcfcfc !important;
+  color: #000;
+}
+
+.celda-sabado .celda-norma {
+  background: #fcfcfc !important;
+}
+
+.celda-sabado .celda-norma.tiene-valor {
+  background: #fcfcfc !important;
+  color: #000;
+}
+
+/* Domingos en celdas divididas */
+.celda-domingo .celda-horas {
+  background: #fdf8f8 !important;
+}
+
+.celda-domingo .celda-horas.tiene-valor {
+  background: #faf2f2 !important;
+  color: #e57373;
+}
+
+.celda-domingo .celda-norma {
+  background: #fefafa !important;
+}
+
+.celda-domingo .celda-norma.tiene-valor {
+  background: #fcf5f5 !important;
+  color: #ef9a9a;
+}
+
+/* Total Columna Doble */
+.col-total-doble {
+  padding: 0 !important;
+  min-width: 65px;
+  vertical-align: middle;
+  height: 50px;
+}
+
+.total-contenido {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 50px;
+}
+
+.total-contenido .total-horas {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  min-height: 25px;
+  font-size: 0.95em;
+  font-weight: 700;
+  color: #fff;
+  background: #3A8E6A;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+}
+
+.total-contenido .total-norma {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  min-height: 22px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #fff;
+  background: #2E7D5B;
 }
 
 /* Footer */
 .consolidado-table tfoot {
-  background-color: #f0f0f0;
   font-weight: 600;
 }
 
 .consolidado-table .footer-row td {
-  background-color: #f0f0f0;
-  border-top: 2px solid #bbb;
+  background: linear-gradient(180deg, #E3F0E8 0%, #B8D8C5 100%);
+  border-top: 2px solid #2E7D5B;
   border-bottom: none;
-  font-weight: 600;
-  padding: 10px;
+  font-weight: 700;
+  padding: 10px 8px;
+  color: #1D5A3F;
 }
 
 .consolidado-table .col-label {
   text-align: left;
+  padding-left: 12px !important;
 }
 
 .consolidado-table .total-dia {
-  background-color: #fff9e6;
-  color: #f39c12;
+  background: #f5f5f5 !important;
+  color: #555;
+  font-size: 0.85em;
 }
 
 .consolidado-table .total-general {
-  background-color: #e8f5e9;
-  color: #27ae60;
+  background: #3A8E6A !important;
+  color: #fff;
+  font-size: 1em;
 }
 
 /* Sin datos */
@@ -674,19 +964,23 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  background: white;
-  border-radius: 8px;
+  background: linear-gradient(135deg, #fff 0%, #f8faf9 100%);
+  border-radius: 16px;
   color: #7f8c8d;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e0e8e4;
 }
 
 .empty-icon {
-  font-size: 3em;
+  font-size: 4em;
   margin-bottom: 20px;
+  filter: grayscale(30%);
 }
 
 .no-data p {
   margin: 10px 0;
   font-size: 1.1em;
+  font-weight: 500;
 }
 
 .hint {
@@ -697,11 +991,12 @@ onMounted(() => {
 
 /* Firma Section */
 .firma-section {
-  padding: 30px 20px;
-  background: white;
-  margin-top: -2px;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
+  padding: 30px 25px;
+  background: linear-gradient(180deg, #fafafa 0%, #E3F0E8 100%);
+  margin: 15px;
+  margin-top: 0;
+  border-radius: 12px;
+  border: 1px solid #B8D8C5;
 }
 
 .firma-container {
@@ -725,10 +1020,10 @@ onMounted(() => {
 .firma-linea {
   width: 100%;
   height: 1px;
-  background-color: #333;
+  background-color: #2E7D5B;
   margin-bottom: 10px;
   min-height: 60px;
-  border-bottom: 2px solid #333;
+  border-bottom: 2px solid #2E7D5B;
 }
 
 .firma-label,
@@ -736,19 +1031,20 @@ onMounted(() => {
 .fecha-label {
   margin: 5px 0 0 0;
   font-size: 0.85em;
-  color: #555;
-  font-weight: 600;
+  color: #3A8E6A;
+  font-weight: 700;
 }
 
 .nombre-label {
-  border-bottom: 1px solid #ddd;
+  border-bottom: 2px solid #2E7D5B;
   padding-bottom: 5px;
   min-width: 150px;
+  color: #1D5A3F;
 }
 
 .fecha-label {
   font-size: 0.9em;
-  color: #666;
+  color: #555;
   font-weight: 500;
   margin-top: 10px;
 }

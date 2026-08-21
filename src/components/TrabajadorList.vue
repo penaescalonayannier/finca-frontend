@@ -32,9 +32,9 @@
       />
 
       <select v-model="filtroEstado" @change="buscarConReset" class="filter-select">
-        <option value="">Todos</option>
         <option value="activos">Solo Activos</option>
         <option value="inactivos">Solo Inactivos</option>
+        <option value="">Todos</option>
       </select>
 
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
@@ -183,17 +183,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar -->
-    <div v-if="mostrarModalEliminar" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Eliminación</h3>
-        <p>¿Eliminar a <strong>{{ trabajadorEliminar?.nombre }}</strong>?</p>
-        <div class="modal-buttons">
-          <button @click="eliminarTrabajador" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminar = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -201,12 +190,14 @@
 import { ref, computed, onMounted } from 'vue'
 import TrabajadorService from '@/services/TrabajadorService'
 import CrearTrabajador from './CrearTrabajador.vue'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Trabajador } from '@/types/Trabajador'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 
 const trabajadores = ref<Trabajador[]>([])
 const searchQuery = ref('')
-const filtroEstado = ref('')
+const filtroEstado = ref('activos')
 const paginaActual = ref(0)
 const tamanoPagina = ref(10)
 const totalElementos = ref(0)
@@ -218,10 +209,8 @@ const isExportando = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalEliminar = ref(false)
 const mostrarModalImportar = ref(false)
 const trabajadorEditando = ref<Trabajador | null>(null)
-const trabajadorEliminar = ref<Trabajador | null>(null)
 
 // Importar
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -248,6 +237,22 @@ const cargarTrabajadores = async () => {
   try {
     const filters: SearchFilter[] = []
 
+    // Agregar filtros de búsqueda por texto
+    if (searchQuery.value.trim()) {
+      filters.push({
+        key: 'nombre',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'ruc',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+    }
+
     // Agregar filtro por estado si está seleccionado
     if (filtroEstado.value) {
       filters.push({
@@ -261,7 +266,7 @@ const cargarTrabajadores = async () => {
     const response = await TrabajadorService.buscarTrabajadores({
       page: paginaActual.value,
       size: tamanoPagina.value,
-      query: searchQuery.value,
+      query: '',
       filter: filters,
     })
 
@@ -347,36 +352,35 @@ const editarTrabajador = async (trabajador: Trabajador) => {
     mostrarModalEditar.value = true
   } catch (error) {
     console.error('Error al cargar el trabajador para editar:', error)
-    alert('Error al cargar el trabajador')
+    notify.error('Error', 'No se pudo cargar el trabajador')
   }
 }
 
-const confirmarEliminar = (trabajador: Trabajador) => {
-  trabajadorEliminar.value = trabajador
-  mostrarModalEliminar.value = true
-}
+const confirmarEliminar = async (trabajador: Trabajador) => {
+  const confirmed = await confirmDialog.delete(trabajador.nombre)
 
-const eliminarTrabajador = async () => {
-  if (!trabajadorEliminar.value?.id) return
-  try {
-    await TrabajadorService.eliminarTrabajador(trabajadorEliminar.value.id)
-    mostrarModalEliminar.value = false
-    trabajadorEliminar.value = null
-    cargarTrabajadores()
-  } catch (error) {
-    console.error('Error al eliminar:', error)
-    alert('Error al eliminar el trabajador')
+  if (confirmed) {
+    try {
+      await TrabajadorService.eliminarTrabajador(trabajador.id!)
+      notify.success('Trabajador eliminado', 'El trabajador fue eliminado correctamente')
+      cargarTrabajadores()
+    } catch (error) {
+      console.error('Error al eliminar:', error)
+      notify.error('Error', 'No se pudo eliminar el trabajador')
+    }
   }
 }
 
 const handleTrabajadorCreado = () => {
   mostrarModalCrear.value = false
+  notify.success('Trabajador creado', 'El trabajador fue registrado correctamente')
   paginaActual.value = 0
   cargarTrabajadores()
 }
 
 const handleTrabajadorActualizado = () => {
   mostrarModalEditar.value = false
+  notify.success('Trabajador actualizado', 'Los datos fueron guardados correctamente')
   cargarTrabajadores()
 }
 
@@ -400,7 +404,7 @@ const validarArchivo = (file: File | undefined) => {
   if (['.csv', '.xlsx', '.xls'].includes(ext)) {
     selectedFile.value = file
   } else {
-    alert('Formato no válido. Use CSV o Excel.')
+    notify.warning('Formato inválido', 'Use archivos CSV o Excel (.csv, .xlsx, .xls)')
   }
 }
 
@@ -462,7 +466,7 @@ const toggleSeleccionarTodos = () => {
 
 const exportarTrabajadores = async () => {
   if (trabajadoresSeleccionados.value.length === 0) {
-    alert('Selecciona al menos un trabajador')
+    notify.warning('Selección vacía', 'Selecciona al menos un trabajador')
     return
   }
 
@@ -482,7 +486,7 @@ const exportarTrabajadores = async () => {
     trabajadoresSeleccionados.value = []
   } catch (error) {
     console.error('Error al exportar:', error)
-    alert('Error al exportar los trabajadores')
+    notify.error('Error', 'No se pudo exportar los trabajadores')
   } finally {
     isExportando.value = false
   }

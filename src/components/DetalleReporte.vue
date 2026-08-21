@@ -306,21 +306,6 @@
       </div>
     </div>
 
-    <!-- Modal Confirmar Eliminar Trabajador -->
-    <div v-if="mostrarModalEliminarTrabajador" class="modal">
-      <div class="modal-content modal-small modal-scroll">
-        <span class="close" @click="cerrarModalEliminarTrabajador">&times;</span>
-        <h3>Confirmar Eliminación</h3>
-        <div class="modal-body">
-          <p>¿Eliminar al trabajador <strong>{{ trabajadorEliminar?.trabajadorNombre }}</strong> de este día?</p>
-        </div>
-        <div class="modal-footer">
-          <button @click="eliminarTrabajadorDia" class="btn-eliminar">Eliminar</button>
-          <button @click="mostrarModalEliminarTrabajador = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
     <!-- Modal Confirmar Horas Excedidas -->
     <div v-if="mostrarModalConfirmacionHoras" class="modal">
       <div class="modal-content modal-small modal-scroll">
@@ -352,6 +337,8 @@ import type { Reporte } from '@/types/Reporte'
 import type { DiaTrabajo, TrabajadorDia } from '@/types/DiaTrabajo'
 import type { Trabajador } from '@/types/Trabajador'
 import type { AxiosError } from 'axios'
+import { notify } from '@/composables/useNotification'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 
 // ==================== UTILIDADES DE FECHA ====================
 const formatDate = (date: string): string => {
@@ -440,7 +427,6 @@ const trabajadoresFiltrados = ref<Trabajador[]>([])
 const mostrarModalAgregarDia = ref(false)
 const mostrarModalAgregarTrabajador = ref(false)
 const mostrarModalEditarTrabajador = ref(false)
-const mostrarModalEliminarTrabajador = ref(false)
 
 // Estados de carga
 const isGuardandoDia = ref(false)
@@ -451,7 +437,6 @@ const nuevoDia = ref({ fecha: '' })
 const diaTrabajoSeleccionado = ref<string>('')
 const nuevoTrabajadorDia = ref({ trabajadorId: '', horas: '', norma: '' })
 const trabajadorEditando = ref<TrabajadorDia | null>(null)
-const trabajadorEliminar = ref<TrabajadorDia | null>(null)
 
 // Modal de confirmación para horas > 8
 const mostrarModalConfirmacionHoras = ref(false)
@@ -714,23 +699,19 @@ const validarYActualizarTrabajadorDia = () => {
 
 const actualizarTrabajadorDia = validarYActualizarTrabajadorDia
 
-const confirmarEliminarTrabajadorDia = (trabajador: TrabajadorDia) => {
-  trabajadorEliminar.value = trabajador
-  mostrarModalEliminarTrabajador.value = true
-}
+const confirmarEliminarTrabajadorDia = async (trabajador: TrabajadorDia) => {
+  const confirmed = await confirmDialog.delete(trabajador.trabajadorNombre || trabajador.id)
 
-const eliminarTrabajadorDia = async () => {
-  if (!trabajadorEliminar.value?.id) return
-  
-  try {
-    await DiaTrabajoService.eliminarTrabajadorDia(trabajadorEliminar.value.id)
-    mostrarModalEliminarTrabajador.value = false
-    trabajadorEliminar.value = null
-    await cargarDias()
-  } catch (error) {
-    console.error('Error al eliminar trabajador:', error)
-    const err = error as AxiosError<{ message: string }>
-    alert(err.response?.data?.message || 'Error al eliminar el trabajador')
+  if (confirmed) {
+    try {
+      await DiaTrabajoService.eliminarTrabajadorDia(trabajador.id!)
+      notify.success('Trabajador eliminado', 'El trabajador fue eliminado del dia correctamente')
+      await cargarDias()
+    } catch (error) {
+      console.error('Error al eliminar trabajador:', error)
+      const err = error as AxiosError<{ message: string }>
+      notify.error('Error', err.response?.data?.message || 'Error al eliminar el trabajador')
+    }
   }
 }
 

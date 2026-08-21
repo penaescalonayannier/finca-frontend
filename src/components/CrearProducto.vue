@@ -12,7 +12,7 @@
           v-model="form.code"
           type="text"
           required
-          placeholder="Ej: PROD-001"
+          placeholder="Ej: PROD001 (solo letras y números)"
         />
       </div>
 
@@ -38,20 +38,45 @@
       </div>
 
       <div class="form-row">
-        <div class="form-group form-group-half">
-          <label for="price">Precio *</label>
-          <input
-            id="price"
-            v-model.number="form.price"
-            type="number"
-            required
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-          />
+        <div class="form-group form-group-third">
+          <label for="unidadMedida">Unidad de Medida *</label>
+          <select id="unidadMedida" v-model="form.unidadMedida" required>
+            <option value="">Seleccione...</option>
+            <optgroup label="Peso">
+              <option value="KG">Kilogramo (KG)</option>
+              <option value="G">Gramo (G)</option>
+              <option value="LB">Libra (LB)</option>
+              <option value="QQ">Quintal (QQ)</option>
+            </optgroup>
+            <optgroup label="Volumen">
+              <option value="L">Litro (L)</option>
+              <option value="ML">Mililitro (ML)</option>
+              <option value="GAL">Galón (GAL)</option>
+            </optgroup>
+            <optgroup label="Cantidad">
+              <option value="UND">Unidad (UND)</option>
+              <option value="DOC">Docena (DOC)</option>
+              <option value="SACO">Saco</option>
+              <option value="CAJA">Caja</option>
+            </optgroup>
+            <optgroup label="Longitud">
+              <option value="M">Metro (M)</option>
+              <option value="CM">Centímetro (CM)</option>
+            </optgroup>
+          </select>
         </div>
 
-        <div class="form-group form-group-half">
+        <div class="form-group form-group-third">
+          <label for="tipoProducto">Tipo de Producto *</label>
+          <select id="tipoProducto" v-model="form.tipoProducto" required>
+            <option value="">Seleccione...</option>
+            <option value="INSUMO">Insumo</option>
+            <option value="VENTA">Venta</option>
+            <option value="OTROS">Otros</option>
+          </select>
+        </div>
+
+        <div class="form-group form-group-third">
           <label for="stock">Stock *</label>
           <input
             id="stock"
@@ -61,6 +86,47 @@
             min="0"
             step="1"
             placeholder="0"
+          />
+        </div>
+      </div>
+
+      <div class="form-row form-row-precios">
+        <div class="form-group form-group-third">
+          <label for="price">Precio (Otros) *</label>
+          <input
+            id="price"
+            v-model.number="form.price"
+            type="number"
+            required
+            step="0.01"
+            min="0.01"
+            placeholder="0.01"
+          />
+        </div>
+
+        <div class="form-group form-group-third">
+          <label for="priceTrabajador">Precio Trabajador *</label>
+          <input
+            id="priceTrabajador"
+            v-model.number="form.priceTrabajador"
+            type="number"
+            required
+            step="0.01"
+            min="0.01"
+            placeholder="0.01"
+          />
+        </div>
+
+        <div class="form-group form-group-third">
+          <label for="priceComedor">Precio Comedor *</label>
+          <input
+            id="priceComedor"
+            v-model.number="form.priceComedor"
+            type="number"
+            required
+            step="0.01"
+            min="0.01"
+            placeholder="0.01"
           />
         </div>
       </div>
@@ -85,7 +151,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import ProductoService from '@/services/ProductoService'
-import type { Producto, ProductoRequest } from '@/types/Producto'
+import type { Producto, ProductoRequest, UnidadMedida } from '@/types/Producto'
 
 const props = defineProps<{
   producto?: Producto | null
@@ -104,9 +170,13 @@ const form = ref<ProductoRequest>({
   code: '',
   name: '',
   description: '',
-  price: 0,
+  price: 0.01,
+  priceTrabajador: 0.01,
+  priceComedor: 0.01,
+  unidadMedida: 'UND' as UnidadMedida,
   stock: 0,
-  active: true
+  active: true,
+  tipoProducto: 'OTROS'
 })
 
 const cargarDatos = () => {
@@ -115,29 +185,60 @@ const cargarDatos = () => {
       code: props.producto.code || '',
       name: props.producto.name || '',
       description: props.producto.description || '',
-      price: props.producto.price || 0,
+      price: props.producto.price || 0.01,
+      priceTrabajador: props.producto.priceTrabajador || 0.01,
+      priceComedor: props.producto.priceComedor || 0.01,
+      unidadMedida: props.producto.unidadMedida || 'UND' as UnidadMedida,
       stock: props.producto.stock || 0,
-      active: props.producto.active !== undefined ? props.producto.active : true
+      active: props.producto.active !== undefined ? props.producto.active : true,
+      tipoProducto: props.producto.tipoProducto || 'OTROS'
     }
   }
 }
 
+// Patrón para validar código alfanumérico (solo letras y números)
+const CODE_PATTERN = /^[a-zA-Z0-9]+$/
+
 const guardar = async () => {
-  // Validaciones
+  // Validaciones según la especificación
+
+  // RN-04: Código alfanumérico
   if (!form.value.code.trim()) {
     alert('El código es obligatorio')
     return
   }
+  if (!CODE_PATTERN.test(form.value.code)) {
+    alert('El código solo puede contener letras y números (sin espacios ni caracteres especiales)')
+    return
+  }
+
   if (!form.value.name.trim()) {
     alert('El nombre es obligatorio')
     return
   }
-  if (form.value.price < 0) {
-    alert('El precio debe ser mayor o igual a 0')
+
+  if (!form.value.unidadMedida) {
+    alert('La unidad de medida es obligatoria')
     return
   }
+
+  // RN-01: Precios > 0
+  if (form.value.price <= 0) {
+    alert('El precio (Otros) debe ser mayor a 0')
+    return
+  }
+  if (form.value.priceTrabajador <= 0) {
+    alert('El precio Trabajador debe ser mayor a 0')
+    return
+  }
+  if (form.value.priceComedor <= 0) {
+    alert('El precio Comedor debe ser mayor a 0')
+    return
+  }
+
+  // RN-03: Stock >= 0
   if (form.value.stock < 0) {
-    alert('El stock debe ser mayor o igual a 0')
+    alert('El stock no puede ser negativo')
     return
   }
 
@@ -200,6 +301,17 @@ h3 {
   flex: 1;
 }
 
+.form-group-third {
+  flex: 1;
+}
+
+.form-row-precios {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
 .form-group label {
   display: block;
   margin-bottom: 5px;
@@ -208,7 +320,8 @@ h3 {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
   width: 100%;
   padding: 10px;
   border: 1px solid #ddd;
@@ -224,7 +337,8 @@ h3 {
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);

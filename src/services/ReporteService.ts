@@ -12,10 +12,22 @@ interface SearchParams {
   size?: number
   page?: number
   sortBy?: string
-  sortType?: 'ASC' | 'DESC'
+  sortType?: 'ASC' | 'DES'
 }
 
 class ReporteService {
+  // ==================== QUERIES ====================
+
+  /**
+   * Obtener el próximo código disponible para un año y mes
+   */
+  async getNextCodigo(year: string, mes: string): Promise<string> {
+    const response = await axios.get(`${API_BASE_URL}/next-codigo`, {
+      params: { year, mes }
+    })
+    return response.data.codigo
+  }
+
   // ==================== COMMANDS ====================
 
   /**
@@ -57,8 +69,8 @@ class ReporteService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || '',
-      sortType: filtros.sortType || 'ASC'
+      sortBy: filtros.sortBy || 'createdAt',
+      sortType: filtros.sortType || 'DES'
     }
 
     return axios.post(`${API_BASE_URL}/search`, requestBody, {

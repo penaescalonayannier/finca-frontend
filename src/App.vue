@@ -23,6 +23,9 @@
               <router-link to="/estado-cuenta" class="dropdown-link" @click="closeMenu">Estados de Cuenta</router-link>
               <router-link to="/prestamos" class="dropdown-link" @click="closeMenu">Préstamos</router-link>
               <router-link to="/toma-prestamos" class="dropdown-link" @click="closeMenu">Toma de Préstamos</router-link>
+              <router-link to="/salidas" class="dropdown-link" @click="closeMenu">Salidas (Vales/Facturas)</router-link>
+              <router-link to="/deudas-trabajadores" class="dropdown-link" @click="closeMenu">Deudas Trabajadores</router-link>
+              <router-link to="/historial-movimientos" class="dropdown-link" @click="closeMenu">Historial Movimientos</router-link>
             </div>
           </div>
 
@@ -40,6 +43,9 @@
               <router-link to="/productos" class="dropdown-link" @click="closeMenu">Productos</router-link>
               <router-link to="/fincas" class="dropdown-link" @click="closeMenu">Fincas</router-link>
               <router-link to="/finca-productos" class="dropdown-link" @click="closeMenu">Finca - Productos</router-link>
+              <router-link to="/almacenes" class="dropdown-link" @click="closeMenu">Almacenes</router-link>
+              <router-link to="/entrada-produccion" class="dropdown-link" @click="closeMenu">Entrada de Producción</router-link>
+              <router-link to="/produccion-terminada" class="dropdown-link" @click="closeMenu">Producción Terminada</router-link>
               <router-link to="/campos" class="dropdown-link" @click="closeMenu">Campos</router-link>
               <router-link to="/reportes" class="dropdown-link" @click="closeMenu">Reportes</router-link>
             </div>
@@ -65,11 +71,19 @@
     <main class="main-content">
       <router-view />
     </main>
+
+    <!-- Sistema de Notificaciones Global -->
+    <NotificationContainer />
+
+    <!-- Diálogos de Confirmación Global -->
+    <ConfirmDialog />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import NotificationContainer from '@/components/NotificationContainer.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 
 const isMenuOpen = ref(false)
 const activeDropdown = ref<string | null>(null)

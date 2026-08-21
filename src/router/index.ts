@@ -10,6 +10,7 @@ import TrabajadorList from '@/components/TrabajadorList.vue'
 import ProductoList from '@/components/ProductoList.vue'
 import FincaList from '@/components/FincaList.vue'
 import FincaProductoList from '@/components/FincaProductoList.vue'
+import EntradaProduccion from '@/components/EntradaProduccion.vue'
 import PrestamoList from '@/components/PrestamoList.vue'
 import TomaPrestamoList from '@/components/TomaPrestamoList.vue'
 import CamposList from '@/components/CamposList.vue'
@@ -27,6 +28,12 @@ import CrearGrupo from '@/components/CrearGrupo.vue'
 import EditarGrupo from '@/components/EditarGrupo.vue'
 import EvaluacionTrabajadores from '@/components/EvaluacionTrabajadores.vue'
 import ListarEvaluacionesView from '@/views/ListarEvaluacionesView.vue'
+import ProduccionTerminadaList from '@/components/ProduccionTerminadaList.vue'
+import SalidaList from '@/components/SalidaList.vue'
+import DeudaTrabajadorList from '@/components/DeudaTrabajadorList.vue'
+import HistorialMovimientos from '@/components/HistorialMovimientos.vue'
+import HistorialStock from '@/components/HistorialStock.vue'
+import AlmacenList from '@/components/AlmacenList.vue'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -73,6 +80,11 @@ const routes: RouteRecordRaw[] = [
     path: '/finca-productos',
     name: 'FincaProductos',
     component: FincaProductoList
+  },
+  {
+    path: '/entrada-produccion',
+    name: 'EntradaProduccion',
+    component: EntradaProduccion
   },
   {
     path: '/prestamos',
@@ -173,6 +185,36 @@ const routes: RouteRecordRaw[] = [
     path: '/grupo/:grupoId/evaluaciones',
     name: 'ListarEvaluaciones',
     component: ListarEvaluacionesView
+  },
+  {
+    path: '/produccion-terminada',
+    name: 'ProduccionTerminada',
+    component: ProduccionTerminadaList
+  },
+  {
+    path: '/salidas',
+    name: 'Salidas',
+    component: SalidaList
+  },
+  {
+    path: '/deudas-trabajadores',
+    name: 'DeudasTrabajadores',
+    component: DeudaTrabajadorList
+  },
+  {
+    path: '/historial-movimientos',
+    name: 'HistorialMovimientos',
+    component: HistorialMovimientos
+  },
+  {
+    path: '/historial-stock',
+    name: 'HistorialStock',
+    component: HistorialStock
+  },
+  {
+    path: '/almacenes',
+    name: 'Almacenes',
+    component: AlmacenList
   }
 ]
 
