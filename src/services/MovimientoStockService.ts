@@ -103,6 +103,23 @@ class MovimientoStockService {
     }
     return axios.get(`${API_BASE_URL}/consolidado`, { params })
   }
+
+  async descargarConsolidadoPdf(fechaInicio: string, fechaFin: string, fincaId?: string): Promise<void> {
+    const params: Record<string, string> = { fechaInicio, fechaFin }
+    if (fincaId) params.fincaId = fincaId
+    const response = await axios.get(`${API_BASE_URL}/consolidado/pdf`, { params, responseType: 'blob' })
+    const contentDisposition = response.headers['content-disposition'] as string | undefined
+    const filename = contentDisposition?.match(/filename="?([^";]+)"?/)?.[1]
+      || `Reporte_movimientos_por_destino_${fechaInicio}_${fechaFin}.pdf`
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
 }
 
 // Types for consolidated report

@@ -29,6 +29,10 @@
           <span v-if="loading">Cargando...</span>
           <span v-else>Generar Reporte</span>
         </button>
+        <button class="btn-pdf" @click="descargarPdf" :disabled="loading || generandoPdf">
+          <span v-if="generandoPdf">Generando PDF...</span>
+          <span v-else>Descargar PDF</span>
+        </button>
       </div>
     </div>
 
@@ -169,6 +173,7 @@ interface ProductoUnificado {
 }
 
 const loading = ref(false)
+const generandoPdf = ref(false)
 const reporte = ref<ReporteConsolidado | null>(null)
 const fincas = ref<Finca[]>([])
 
@@ -276,6 +281,26 @@ const cargarReporte = async () => {
     alert('Error al cargar el reporte')
   } finally {
     loading.value = false
+  }
+}
+
+const descargarPdf = async () => {
+  if (!fechaInicio.value || !fechaFin.value) {
+    alert('Debe seleccionar un rango de fechas')
+    return
+  }
+  generandoPdf.value = true
+  try {
+    await MovimientoStockService.descargarConsolidadoPdf(
+      fechaInicio.value,
+      fechaFin.value,
+      fincaId.value || undefined
+    )
+  } catch (error) {
+    console.error('Error generando PDF:', error)
+    alert('No fue posible generar el PDF del reporte')
+  } finally {
+    generandoPdf.value = false
   }
 }
 
@@ -407,6 +432,25 @@ onMounted(() => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.btn-pdf {
+  background: #0f766e;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-pdf:hover:not(:disabled) {
+  background: #0d5f59;
+}
+
+.btn-pdf:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .resumen h3 {
