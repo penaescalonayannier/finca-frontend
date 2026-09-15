@@ -1,5 +1,7 @@
 // src/types/Almacen.ts
 
+import type { DestinoSalida } from './Salida'
+
 export interface Almacen {
   id?: string
   nombre: string
@@ -76,6 +78,23 @@ export interface SalidaAlmacenRequest {
   descripcion?: string
   trabajadorId?: string
   destino?: 'TRABAJADOR' | 'COMEDOR' | 'VENTA' | 'OTRO'
+}
+
+export interface LineaSalidaMultipleAlmacenRequest {
+  almacenFincaProductoId: string
+  cantidad: number
+}
+
+export interface SalidaMultipleAlmacenRequest {
+  destino: DestinoSalida
+  observaciones?: string
+  lineas: LineaSalidaMultipleAlmacenRequest[]
+}
+
+export interface SalidaMultipleAlmacenResponse {
+  salidaIds: string[]
+  cantidadLineas: number
+  command: string
 }
 
 export interface TransferenciaAlmacenRequest {

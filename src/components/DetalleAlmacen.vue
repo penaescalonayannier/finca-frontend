@@ -22,9 +22,14 @@
       <div class="section">
         <div class="section-header">
           <h4>Productos en Almacen</h4>
-          <button @click="abrirModalAgregar" class="btn-agregar">
-            + Agregar Producto
-          </button>
+          <div class="section-actions">
+            <button @click="abrirModalSalidaMultiple" class="btn-salida-multiple" :disabled="!almacen?.productos?.some(p => p.stock > 0)">
+              ↑ Salida múltiple
+            </button>
+            <button @click="abrirModalAgregar" class="btn-agregar">
+              + Agregar Producto
+            </button>
+          </div>
         </div>
 
         <div v-if="!almacen?.productos || almacen.productos.length === 0" class="empty-state">
@@ -459,6 +464,81 @@
       </div>
     </div>
 
+    <!-- Modal Salida múltiple -->
+    <div v-if="mostrarModalSalidaMultiple" class="modal-overlay" @click.self="cerrarModalSalidaMultiple">
+      <div class="modal-operacion modal-salida-multiple">
+        <div class="modal-header modal-header-salida">
+          <h4>↑ Registrar salida múltiple</h4>
+          <button @click="cerrarModalSalidaMultiple" class="btn-cerrar-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="multiple-help">
+            Seleccione los productos y cantidades para un mismo destino. La operación se confirma completa o no se registra ninguna línea.
+          </p>
+
+          <div class="form-group">
+            <label>Destino *</label>
+            <select v-model="salidaMultipleForm.destino" class="form-control">
+              <option v-for="opt in destinoOptionsMultiple" :key="opt.value" :value="opt.value">
+                {{ opt.icon }} {{ opt.label }} ({{ opt.tipo }})
+              </option>
+            </select>
+            <small>Para trabajadores use la salida individual, que registra la persona y su deuda por producto.</small>
+          </div>
+
+          <div class="multiple-productos">
+            <div class="multiple-productos-header">
+              <span>Producto</span>
+              <span>Disponible</span>
+              <span>Cantidad a sacar</span>
+            </div>
+            <label
+              v-for="linea in salidaMultipleForm.lineas"
+              :key="linea.almacenFincaProductoId"
+              class="multiple-producto-row"
+              :class="{ selected: linea.seleccionada }"
+            >
+              <input v-model="linea.seleccionada" type="checkbox" />
+              <span class="multiple-producto-nombre">
+                <strong>{{ linea.productoName }}</strong>
+                <small>{{ linea.unidadMedida || 'Unidad' }}</small>
+              </span>
+              <span>{{ linea.stock }}</span>
+              <span class="multiple-cantidad">
+                <input
+                  v-model.number="linea.cantidad"
+                  type="number"
+                  min="1"
+                  :max="linea.stock"
+                  :disabled="!linea.seleccionada"
+                  class="form-control"
+                />
+                <small v-if="linea.seleccionada && (!Number.isInteger(linea.cantidad) || linea.cantidad < 1 || linea.cantidad > linea.stock)" class="error-text">
+                  Entre 1 y {{ linea.stock }}
+                </small>
+              </span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label>Observaciones</label>
+            <textarea v-model="salidaMultipleForm.observaciones" class="form-control" rows="2" placeholder="Observaciones opcionales..."></textarea>
+          </div>
+
+          <div class="multiple-summary">
+            {{ lineasSalidaMultipleSeleccionadas.length }} producto(s) seleccionado(s),
+            {{ cantidadTotalSalidaMultiple }} unidad(es) en total.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="cerrarModalSalidaMultiple" class="btn-cancelar">Cancelar</button>
+          <button @click="ejecutarSalidaMultiple" class="btn-confirmar btn-salida-confirm" :disabled="!esSalidaMultipleValida || procesando">
+            {{ procesando ? 'Procesando...' : 'Confirmar salida múltiple' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Transferencia -->
     <div v-if="mostrarModalTransferencia" class="modal-overlay" @click.self="cerrarModalTransferencia">
       <div class="modal-operacion">
@@ -552,6 +632,7 @@ const agregandoProducto = ref(false)
 // Modales de operaciones
 const mostrarModalEntrada = ref(false)
 const mostrarModalSalida = ref(false)
+const mostrarModalSalidaMultiple = ref(false)
 const mostrarModalTransferencia = ref(false)
 const productoOperacion = ref<AlmacenFincaProducto | null>(null)
 const procesando = ref(false)
@@ -624,6 +705,21 @@ const salidaForm = reactive({
   items: [{ trabajadorId: '', cantidad: 1, pagado: false }] as ItemSalida[]
 })
 
+interface LineaSalidaMultipleForm {
+  almacenFincaProductoId: string
+  productoName: string
+  unidadMedida?: string
+  stock: number
+  seleccionada: boolean
+  cantidad: number
+}
+
+const salidaMultipleForm = reactive({
+  destino: 'COMEDOR' as DestinoSalida,
+  observaciones: '',
+  lineas: [] as LineaSalidaMultipleForm[]
+})
+
 // RN-09: Tipo automático según destino
 const tipoGenerado = computed(() => DESTINO_TIPO_MAP[salidaForm.destino])
 
@@ -637,6 +733,23 @@ const isSalidaFormValid = computed(() => {
     cantidadTotalSalida.value > 0 &&
     cantidadTotalSalida.value <= stock
 })
+
+const destinoOptionsMultiple = computed(() => destinoOptions.filter(option => option.value !== 'TRABAJADORES'))
+
+const lineasSalidaMultipleSeleccionadas = computed(() =>
+  salidaMultipleForm.lineas.filter(linea => linea.seleccionada)
+)
+
+const cantidadTotalSalidaMultiple = computed(() =>
+  lineasSalidaMultipleSeleccionadas.value.reduce((total, linea) => total + (linea.cantidad || 0), 0)
+)
+
+const esSalidaMultipleValida = computed(() =>
+  lineasSalidaMultipleSeleccionadas.value.length > 0 &&
+  lineasSalidaMultipleSeleccionadas.value.every(linea =>
+    Number.isInteger(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
+  )
+)
 
 const transferenciaForm = reactive({
   destinoAlmacenId: '',
@@ -936,6 +1049,58 @@ const cerrarModalSalida = () => {
   productoOperacion.value = null
 }
 
+// ==================== SALIDA MÚLTIPLE ====================
+const abrirModalSalidaMultiple = () => {
+  salidaMultipleForm.destino = 'COMEDOR'
+  salidaMultipleForm.observaciones = ''
+  salidaMultipleForm.lineas = (almacen.value?.productos || [])
+    .filter(producto => producto.stock > 0)
+    .map(producto => ({
+      almacenFincaProductoId: producto.id,
+      productoName: producto.productoName,
+      unidadMedida: producto.unidadMedida,
+      stock: producto.stock,
+      seleccionada: false,
+      cantidad: 1
+    }))
+  mostrarModalSalidaMultiple.value = true
+}
+
+const cerrarModalSalidaMultiple = () => {
+  mostrarModalSalidaMultiple.value = false
+  salidaMultipleForm.lineas = []
+}
+
+const ejecutarSalidaMultiple = async () => {
+  if (!almacen.value?.id || !esSalidaMultipleValida.value) return
+
+  procesando.value = true
+  try {
+    const response = await AlmacenService.salidaMultiple(almacen.value.id, {
+      destino: salidaMultipleForm.destino,
+      observaciones: salidaMultipleForm.observaciones,
+      lineas: lineasSalidaMultipleSeleccionadas.value.map(linea => ({
+        almacenFincaProductoId: linea.almacenFincaProductoId,
+        cantidad: linea.cantidad
+      }))
+    })
+    const cantidadLineas = response.data.cantidadLineas || lineasSalidaMultipleSeleccionadas.value.length
+    notify.success('Salida múltiple registrada', `Se registraron ${cantidadLineas} salida(s) correctamente.`)
+    cerrarModalSalidaMultiple()
+    await cargarAlmacen()
+    if (mostrarAsientos.value) {
+      await cargarAsientosContables()
+    }
+    emit('updated')
+  } catch (error: unknown) {
+    console.error('Error al registrar salida múltiple:', error)
+    const err = error as { response?: { data?: { message?: string } } }
+    notify.error('Error', err.response?.data?.message || 'No se pudo registrar la salida múltiple')
+  } finally {
+    procesando.value = false
+  }
+}
+
 const agregarItemSalida = () => {
   salidaForm.items.push({ trabajadorId: '', cantidad: 1, pagado: false })
 }
@@ -1170,6 +1335,11 @@ onMounted(() => {
   font-size: 1.2em;
 }
 
+.section-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .btn-agregar {
   padding: 8px 16px;
   background: #27ae60;
@@ -1213,6 +1383,105 @@ onMounted(() => {
   cursor: pointer;
   font-weight: 600;
   transition: all 0.3s ease;
+}
+
+.btn-salida-multiple {
+  padding: 8px 16px;
+  background: #e67e22;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-salida-multiple:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.modal-salida-multiple {
+  max-width: 760px;
+}
+
+.multiple-help {
+  margin-top: 0;
+  color: #5d6d7e;
+  line-height: 1.45;
+}
+
+.multiple-productos {
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #e5e7e9;
+  border-radius: 6px;
+  margin-bottom: 18px;
+}
+
+.multiple-productos-header,
+.multiple-producto-row {
+  display: grid;
+  grid-template-columns: 26px minmax(180px, 1fr) 100px 160px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.multiple-productos-header {
+  grid-template-columns: 26px minmax(180px, 1fr) 100px 160px;
+  background: #f4f6f7;
+  color: #566573;
+  font-size: 0.82em;
+  font-weight: 700;
+}
+
+.multiple-productos-header span:first-child {
+  grid-column: 2;
+}
+
+.multiple-producto-row {
+  border-top: 1px solid #eef1f2;
+  cursor: pointer;
+}
+
+.multiple-producto-row.selected {
+  background: #fef5e7;
+}
+
+.multiple-producto-nombre {
+  display: flex;
+  flex-direction: column;
+}
+
+.multiple-producto-nombre small,
+.multiple-cantidad small {
+  color: #7f8c8d;
+  font-size: 0.78em;
+}
+
+.multiple-cantidad .form-control {
+  width: 100%;
+}
+
+.multiple-summary {
+  background: #fef5e7;
+  border-radius: 5px;
+  color: #935116;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
+@media (max-width: 650px) {
+  .section-actions {
+    flex-direction: column;
+  }
+
+  .multiple-productos-header,
+  .multiple-producto-row {
+    grid-template-columns: 22px minmax(110px, 1fr) 70px 95px;
+    gap: 6px;
+    padding: 9px 7px;
+  }
 }
 
 .btn-agregar-empty:hover {
