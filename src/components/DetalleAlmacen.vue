@@ -483,7 +483,9 @@
                 {{ opt.icon }} {{ opt.label }} ({{ opt.tipo }})
               </option>
             </select>
-            <small>Para trabajadores use la salida individual, que registra la persona y su deuda por producto.</small>
+            <small v-if="salidaMultipleForm.destino === 'TRABAJADORES'">
+              Para cada producto seleccione los trabajadores compradores, su cantidad y si pagaron. La suma debe coincidir con la salida del producto.
+            </small>
           </div>
 
           <div class="multiple-productos">
@@ -492,32 +494,56 @@
               <span>Disponible</span>
               <span>Cantidad a sacar</span>
             </div>
-            <label
-              v-for="linea in salidaMultipleForm.lineas"
-              :key="linea.almacenFincaProductoId"
-              class="multiple-producto-row"
-              :class="{ selected: linea.seleccionada }"
-            >
-              <input v-model="linea.seleccionada" type="checkbox" />
-              <span class="multiple-producto-nombre">
-                <strong>{{ linea.productoName }}</strong>
-                <small>{{ linea.unidadMedida || 'Unidad' }}</small>
-              </span>
-              <span>{{ linea.stock }}</span>
-              <span class="multiple-cantidad">
-                <input
-                  v-model.number="linea.cantidad"
-                  type="number"
-                  min="1"
-                  :max="linea.stock"
-                  :disabled="!linea.seleccionada"
-                  class="form-control"
-                />
-                <small v-if="linea.seleccionada && (!Number.isInteger(linea.cantidad) || linea.cantidad < 1 || linea.cantidad > linea.stock)" class="error-text">
-                  Entre 1 y {{ linea.stock }}
+            <template v-for="linea in salidaMultipleForm.lineas" :key="linea.almacenFincaProductoId">
+              <label
+                class="multiple-producto-row"
+                :class="{ selected: linea.seleccionada }"
+              >
+                <input :checked="linea.seleccionada" type="checkbox" @change="alternarLineaSalidaMultiple(linea, $event)" />
+                <span class="multiple-producto-nombre">
+                  <strong>{{ linea.productoName }}</strong>
+                  <small>{{ linea.unidadMedida || 'Unidad' }}</small>
+                </span>
+                <span>{{ linea.stock }}</span>
+                <span class="multiple-cantidad">
+                  <template v-if="salidaMultipleForm.destino === 'TRABAJADORES'">
+                    <strong>{{ cantidadAsignadaLinea(linea) }}</strong>
+                    <small>Asignada a compradores</small>
+                  </template>
+                  <template v-else>
+                    <input
+                      v-model.number="linea.cantidad"
+                      type="number"
+                      min="1"
+                      :max="linea.stock"
+                      :disabled="!linea.seleccionada"
+                      class="form-control"
+                    />
+                    <small v-if="linea.seleccionada && (!Number.isInteger(linea.cantidad) || linea.cantidad < 1 || linea.cantidad > linea.stock)" class="error-text">
+                      Entre 1 y {{ linea.stock }}
+                    </small>
+                  </template>
+                </span>
+              </label>
+              <div v-if="salidaMultipleForm.destino === 'TRABAJADORES' && linea.seleccionada" class="compradores-producto">
+                <div class="compradores-header">
+                  <strong>Compradores de {{ linea.productoName }}</strong>
+                  <button type="button" class="btn-agregar-comprador" @click="agregarCompradorLinea(linea)">+ Agregar comprador</button>
+                </div>
+                <div v-for="(item, index) in linea.items" :key="index" class="comprador-linea">
+                  <select v-model="item.trabajadorId" class="form-control">
+                    <option value="">Seleccione trabajador</option>
+                    <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">{{ trabajador.nombre }}</option>
+                  </select>
+                  <input v-model.number="item.cantidad" type="number" min="1" :max="linea.stock" class="form-control" placeholder="Cantidad" />
+                  <label class="pagado-check"><input v-model="item.pagado" type="checkbox" /> Pagó</label>
+                  <button v-if="linea.items.length > 1" type="button" class="btn-eliminar-comprador" @click="eliminarCompradorLinea(linea, index)">&times;</button>
+                </div>
+                <small v-if="!lineaValidaParaTrabajadores(linea)" class="error-text">
+                  Seleccione cada trabajador una sola vez y asigne entre 1 y {{ linea.stock }} unidades en total.
                 </small>
-              </span>
-            </label>
+              </div>
+            </template>
           </div>
 
           <div class="form-group">
@@ -712,6 +738,7 @@ interface LineaSalidaMultipleForm {
   stock: number
   seleccionada: boolean
   cantidad: number
+  items: ItemSalida[]
 }
 
 const salidaMultipleForm = reactive({
@@ -734,20 +761,43 @@ const isSalidaFormValid = computed(() => {
     cantidadTotalSalida.value <= stock
 })
 
-const destinoOptionsMultiple = computed(() => destinoOptions.filter(option => option.value !== 'TRABAJADORES'))
+const destinoOptionsMultiple = computed(() => destinoOptions)
 
 const lineasSalidaMultipleSeleccionadas = computed(() =>
   salidaMultipleForm.lineas.filter(linea => linea.seleccionada)
 )
 
+const cantidadAsignadaLinea = (linea: LineaSalidaMultipleForm): number =>
+  linea.items.reduce((total, item) => total + (Number.isInteger(item.cantidad) ? item.cantidad : 0), 0)
+
+const cantidadLineaSalidaMultiple = (linea: LineaSalidaMultipleForm): number =>
+  salidaMultipleForm.destino === 'TRABAJADORES' ? cantidadAsignadaLinea(linea) : linea.cantidad
+
+const lineaValidaParaTrabajadores = (linea: LineaSalidaMultipleForm): boolean => {
+  if (linea.items.length === 0) return false
+  const trabajadoresSeleccionados = new Set<string>()
+  const itemsValidos = linea.items.every(item => {
+    const trabajadorId = item.trabajadorId || ''
+    if (!trabajadorId || !Number.isInteger(item.cantidad) || item.cantidad < 1 || trabajadoresSeleccionados.has(trabajadorId)) {
+      return false
+    }
+    trabajadoresSeleccionados.add(trabajadorId)
+    return true
+  })
+  const cantidadAsignada = cantidadAsignadaLinea(linea)
+  return itemsValidos && cantidadAsignada > 0 && cantidadAsignada <= linea.stock
+}
+
 const cantidadTotalSalidaMultiple = computed(() =>
-  lineasSalidaMultipleSeleccionadas.value.reduce((total, linea) => total + (linea.cantidad || 0), 0)
+  lineasSalidaMultipleSeleccionadas.value.reduce((total, linea) => total + cantidadLineaSalidaMultiple(linea), 0)
 )
 
 const esSalidaMultipleValida = computed(() =>
   lineasSalidaMultipleSeleccionadas.value.length > 0 &&
   lineasSalidaMultipleSeleccionadas.value.every(linea =>
-    Number.isInteger(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
+    salidaMultipleForm.destino === 'TRABAJADORES'
+      ? lineaValidaParaTrabajadores(linea)
+      : Number.isInteger(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
   )
 )
 
@@ -1050,7 +1100,7 @@ const cerrarModalSalida = () => {
 }
 
 // ==================== SALIDA MÚLTIPLE ====================
-const abrirModalSalidaMultiple = () => {
+const abrirModalSalidaMultiple = async () => {
   salidaMultipleForm.destino = 'COMEDOR'
   salidaMultipleForm.observaciones = ''
   salidaMultipleForm.lineas = (almacen.value?.productos || [])
@@ -1061,14 +1111,33 @@ const abrirModalSalidaMultiple = () => {
       unidadMedida: producto.unidadMedida,
       stock: producto.stock,
       seleccionada: false,
-      cantidad: 1
+      cantidad: 1,
+      items: []
     }))
   mostrarModalSalidaMultiple.value = true
+  await cargarTrabajadores()
 }
 
 const cerrarModalSalidaMultiple = () => {
   mostrarModalSalidaMultiple.value = false
   salidaMultipleForm.lineas = []
+}
+
+const alternarLineaSalidaMultiple = (linea: LineaSalidaMultipleForm, event: Event) => {
+  linea.seleccionada = (event.target as HTMLInputElement).checked
+  if (!linea.seleccionada) {
+    linea.items = []
+  } else if (salidaMultipleForm.destino === 'TRABAJADORES' && linea.items.length === 0) {
+    linea.items = [{ trabajadorId: '', cantidad: 1, pagado: false }]
+  }
+}
+
+const agregarCompradorLinea = (linea: LineaSalidaMultipleForm) => {
+  linea.items.push({ trabajadorId: '', cantidad: 1, pagado: false })
+}
+
+const eliminarCompradorLinea = (linea: LineaSalidaMultipleForm, index: number) => {
+  linea.items.splice(index, 1)
 }
 
 const ejecutarSalidaMultiple = async () => {
@@ -1081,7 +1150,14 @@ const ejecutarSalidaMultiple = async () => {
       observaciones: salidaMultipleForm.observaciones,
       lineas: lineasSalidaMultipleSeleccionadas.value.map(linea => ({
         almacenFincaProductoId: linea.almacenFincaProductoId,
-        cantidad: linea.cantidad
+        cantidad: cantidadLineaSalidaMultiple(linea),
+        items: salidaMultipleForm.destino === 'TRABAJADORES'
+          ? linea.items.map(item => ({
+              trabajadorId: item.trabajadorId,
+              cantidad: item.cantidad,
+              pagado: Boolean(item.pagado)
+            }))
+          : undefined
       }))
     })
     const cantidadLineas = response.data.cantidadLineas || lineasSalidaMultipleSeleccionadas.value.length
@@ -1116,6 +1192,21 @@ watch(() => salidaForm.destino, (newDestino) => {
       item.trabajadorId = ''
     })
   }
+})
+
+watch(() => salidaMultipleForm.destino, async (newDestino) => {
+  if (newDestino === 'TRABAJADORES') {
+    await cargarTrabajadores()
+    salidaMultipleForm.lineas.forEach(linea => {
+      if (linea.seleccionada && linea.items.length === 0) {
+        linea.items = [{ trabajadorId: '', cantidad: 1, pagado: false }]
+      }
+    })
+    return
+  }
+  salidaMultipleForm.lineas.forEach(linea => {
+    linea.items = []
+  })
 })
 
 const ejecutarSalida = async () => {
@@ -1463,6 +1554,63 @@ onMounted(() => {
   width: 100%;
 }
 
+.compradores-producto {
+  border-top: 1px dashed #f0b27a;
+  background: #fffaf2;
+  padding: 10px 12px 12px 50px;
+}
+
+.compradores-header,
+.comprador-linea {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 110px 92px 28px;
+  gap: 8px;
+  align-items: center;
+}
+
+.compradores-header {
+  grid-template-columns: 1fr auto;
+  margin-bottom: 8px;
+  color: #935116;
+  font-size: 0.86em;
+}
+
+.comprador-linea + .comprador-linea {
+  margin-top: 7px;
+}
+
+.btn-agregar-comprador,
+.btn-eliminar-comprador {
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-agregar-comprador {
+  background: #e67e22;
+  color: #fff;
+  padding: 5px 8px;
+  font-size: 0.8em;
+}
+
+.btn-eliminar-comprador {
+  background: #fdecea;
+  color: #c0392b;
+  font-size: 1.1em;
+  line-height: 28px;
+  height: 28px;
+}
+
+.pagado-check {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  color: #566573;
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
 .multiple-summary {
   background: #fef5e7;
   border-radius: 5px;
@@ -1481,6 +1629,20 @@ onMounted(() => {
     grid-template-columns: 22px minmax(110px, 1fr) 70px 95px;
     gap: 6px;
     padding: 9px 7px;
+  }
+
+  .compradores-producto {
+    padding-left: 14px;
+  }
+
+  .comprador-linea {
+    grid-template-columns: minmax(100px, 1fr) 74px 68px 24px;
+    gap: 5px;
+  }
+
+  .compradores-header {
+    grid-template-columns: minmax(100px, 1fr) auto;
+    gap: 5px;
   }
 }
 

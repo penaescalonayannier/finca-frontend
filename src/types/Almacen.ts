@@ -1,6 +1,6 @@
 // src/types/Almacen.ts
 
-import type { DestinoSalida } from './Salida'
+import type { DestinoSalida, ItemSalida } from './Salida'
 
 export interface Almacen {
   id?: string
@@ -83,6 +83,7 @@ export interface SalidaAlmacenRequest {
 export interface LineaSalidaMultipleAlmacenRequest {
   almacenFincaProductoId: string
   cantidad: number
+  items?: ItemSalida[]
 }
 
 export interface SalidaMultipleAlmacenRequest {
