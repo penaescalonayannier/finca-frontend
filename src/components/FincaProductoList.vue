@@ -140,11 +140,11 @@
         <div class="form-row">
           <div class="form-group">
             <label>Stock Inicial</label>
-            <input v-model.number="formAsignar.stock" type="number" min="0" class="form-input" placeholder="0" />
+            <input v-model.number="formAsignar.stock" type="number" min="0" step="0.0001" class="form-input" placeholder="0.0000" />
           </div>
           <div class="form-group">
             <label>Stock Mínimo</label>
-            <input v-model.number="formAsignar.stockMinimo" type="number" min="0" class="form-input" placeholder="0" />
+            <input v-model.number="formAsignar.stockMinimo" type="number" min="0" step="0.0001" class="form-input" placeholder="0.0000" />
           </div>
         </div>
 
@@ -190,7 +190,7 @@
           </div>
           <div class="form-group">
             <label>Cantidad *</label>
-            <input v-model.number="formAjuste.cantidad" type="number" min="1" step="1" class="form-input" :disabled="isAjustando" />
+            <input v-model.number="formAjuste.cantidad" type="number" min="0.0001" step="0.0001" class="form-input" :disabled="isAjustando" />
           </div>
         </div>
 
@@ -265,7 +265,7 @@ const formAsignar = ref({
 const formAjuste = ref({
   almacenId: '',
   tipoMovimiento: 'ENTRADA_AJUSTE' as 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE',
-  cantidad: 1,
+  cantidad: 0.0001,
   observaciones: ''
 })
 
@@ -393,7 +393,7 @@ const abrirModalAjuste = async (relacion: FincaProducto) => {
   formAjuste.value = {
     almacenId: '',
     tipoMovimiento: 'ENTRADA_AJUSTE',
-    cantidad: 1,
+    cantidad: 0.0001,
     observaciones: ''
   }
   almacenesProducto.value = []
