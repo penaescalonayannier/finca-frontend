@@ -107,27 +107,52 @@
     <div v-if="mostrarModalConsolidado" class="modal" @click.self="cerrarModalConsolidado">
       <div class="modal-content modal-consolidado">
         <span class="close" @click="cerrarModalConsolidado">&times;</span>
-        <h3>Vale consolidado por destino</h3>
+        <h3>Vales consolidados por destino</h3>
         <p class="consolidado-info">
-          Genera un único PDF con los vales activos del día y destino seleccionados. Incluye el resumen por producto y el detalle de entrega por trabajador. No modifica inventario ni contabilidad.
+          Seleccione los vales activos de la fecha. El PDF será uno solo, con una sección independiente para cada destino. No modifica inventario ni contabilidad.
         </p>
 
         <div class="form-group">
           <label>Fecha *</label>
-          <input v-model="formConsolidado.fecha" type="date" class="form-input" :disabled="generandoConsolidado" />
+          <input v-model="formConsolidado.fecha" type="date" class="form-input" :disabled="generandoConsolidado || cargandoValesConsolidado" @change="cargarValesConsolidado" />
         </div>
-        <div class="form-group">
-          <label>Destino *</label>
-          <select v-model="formConsolidado.destino" class="form-select" :disabled="generandoConsolidado">
-            <option value="TRABAJADORES">Trabajadores</option>
-            <option value="COMEDOR">Comedor</option>
-            <option value="INSUMO">Insumo</option>
-            <option value="OTROS">Otros</option>
-          </select>
+
+        <div v-if="cargandoValesConsolidado" class="vales-loading">Cargando vales...</div>
+        <div v-else-if="valesAgrupados.length === 0" class="vales-vacio">
+          No existen vales activos para esta fecha.
         </div>
+        <div v-else class="grupos-vales">
+          <div v-for="grupo in valesAgrupados" :key="grupo.destino" class="grupo-vales">
+            <div class="grupo-vales-header">
+              <label>
+                <input
+                  type="checkbox"
+                  :checked="todosValesDelGrupoSeleccionados(grupo.vales)"
+                  :disabled="generandoConsolidado"
+                  @change="alternarGrupoVales(grupo.vales)"
+                />
+                <strong>{{ formatDestino(grupo.destino) }}</strong>
+              </label>
+              <span>{{ grupo.vales.length }} vale(s)</span>
+            </div>
+            <label v-for="vale in grupo.vales" :key="vale.id" class="vale-seleccionable">
+              <input
+                type="checkbox"
+                :checked="valesSeleccionados.has(vale.id)"
+                :disabled="generandoConsolidado"
+                @change="alternarValeSeleccionado(vale.id)"
+              />
+              <span><strong>{{ vale.numero }}</strong> · {{ vale.productoName }}</span>
+              <span>{{ vale.cantidadTotal }} {{ vale.unidadMedida || 'ud.' }}</span>
+            </label>
+          </div>
+        </div>
+        <p v-if="valesAgrupados.length > 0" class="seleccion-resumen">
+          {{ valesSeleccionados.size }} vale(s) seleccionado(s).
+        </p>
         <div class="form-actions">
           <button class="btn-cancelar" @click="cerrarModalConsolidado" :disabled="generandoConsolidado">Cancelar</button>
-          <button class="btn-guardar" @click="generarPdfConsolidado" :disabled="!formConsolidado.fecha || generandoConsolidado">
+          <button class="btn-guardar" @click="generarPdfConsolidado" :disabled="!formConsolidado.fecha || valesSeleccionados.size === 0 || generandoConsolidado">
             {{ generandoConsolidado ? 'Generando...' : 'Descargar PDF' }}
           </button>
         </div>
@@ -247,15 +272,27 @@ const mostrarModalDetalles = ref(false)
 const mostrarModalCrear = ref(false)
 const mostrarModalConsolidado = ref(false)
 const generandoConsolidado = ref(false)
+const cargandoValesConsolidado = ref(false)
 const formConsolidado = ref({
-  fecha: new Date().toISOString().slice(0, 10),
-  destino: 'TRABAJADORES'
+  fecha: new Date().toISOString().slice(0, 10)
 })
+const valesConsolidado = ref<Salida[]>([])
+const valesSeleccionados = ref<Set<string>>(new Set())
 
 const salidaSeleccionada = ref<Salida | null>(null)
 
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
+
+const valesAgrupados = computed(() => {
+  const grupos = new Map<string, Salida[]>()
+  valesConsolidado.value.forEach(vale => {
+    const grupo = grupos.get(vale.destino) || []
+    grupo.push(vale)
+    grupos.set(vale.destino, grupo)
+  })
+  return Array.from(grupos, ([destino, vales]) => ({ destino, vales }))
+})
 
 const cargarSalidas = async () => {
   isLoading.value = true
@@ -300,38 +337,77 @@ const cambiarTamanoPagina = () => {
   cargarSalidas()
 }
 
-const abrirModalConsolidado = () => {
+const abrirModalConsolidado = async () => {
   formConsolidado.value = {
-    fecha: new Date().toISOString().slice(0, 10),
-    destino: 'TRABAJADORES'
+    fecha: new Date().toISOString().slice(0, 10)
   }
+  valesConsolidado.value = []
+  valesSeleccionados.value = new Set()
   mostrarModalConsolidado.value = true
+  await cargarValesConsolidado()
 }
 
 const cerrarModalConsolidado = () => {
   if (generandoConsolidado.value) return
   mostrarModalConsolidado.value = false
+  valesConsolidado.value = []
+  valesSeleccionados.value = new Set()
+}
+
+const cargarValesConsolidado = async () => {
+  if (!formConsolidado.value.fecha) return
+  cargandoValesConsolidado.value = true
+  try {
+    const response = await SalidaService.obtenerValesPorFecha(formConsolidado.value.fecha)
+    valesConsolidado.value = response.data || []
+    valesSeleccionados.value = new Set(valesConsolidado.value.map(vale => vale.id))
+  } catch (error) {
+    console.error('Error al cargar vales consolidados:', error)
+    valesConsolidado.value = []
+    valesSeleccionados.value = new Set()
+    notify.error('Error', 'No se pudieron cargar los vales de la fecha')
+  } finally {
+    cargandoValesConsolidado.value = false
+  }
+}
+
+const alternarValeSeleccionado = (id: string) => {
+  const seleccionados = new Set(valesSeleccionados.value)
+  if (seleccionados.has(id)) {
+    seleccionados.delete(id)
+  } else {
+    seleccionados.add(id)
+  }
+  valesSeleccionados.value = seleccionados
+}
+
+const todosValesDelGrupoSeleccionados = (vales: Salida[]): boolean =>
+  vales.length > 0 && vales.every(vale => valesSeleccionados.value.has(vale.id))
+
+const alternarGrupoVales = (vales: Salida[]) => {
+  const seleccionados = new Set(valesSeleccionados.value)
+  const seleccionar = !todosValesDelGrupoSeleccionados(vales)
+  vales.forEach(vale => {
+    if (seleccionar) seleccionados.add(vale.id)
+    else seleccionados.delete(vale.id)
+  })
+  valesSeleccionados.value = seleccionados
 }
 
 const generarPdfConsolidado = async () => {
   if (!formConsolidado.value.fecha) return
   generandoConsolidado.value = true
   try {
-    await SalidaService.descargarValesConsolidados(
+    await SalidaService.descargarValesConsolidadosPorDestino(
       formConsolidado.value.fecha,
-      formConsolidado.value.destino
+      Array.from(valesSeleccionados.value)
     )
-    notify.success('PDF generado', 'Se descargó el vale consolidado sin modificar registros contables ni de inventario')
+    notify.success('PDF generado', 'Se descargó el PDF agrupado por destino sin modificar registros contables ni de inventario')
     generandoConsolidado.value = false
     cerrarModalConsolidado()
   } catch (error: unknown) {
     console.error('Error al generar vale consolidado:', error)
-    const status = (error as { response?: { status?: number } })?.response?.status
-    if (status === 404) {
-      notify.warning('Sin vales', 'No existen vales activos para la fecha y el destino seleccionados')
-    } else {
-      notify.error('Error', 'No se pudo generar el PDF consolidado')
-    }
+    notify.error('Error', 'No se pudo generar el PDF consolidado')
   } finally {
     generandoConsolidado.value = false
   }
@@ -375,9 +451,10 @@ const confirmarEliminar = async (salida: Salida) => {
       await SalidaService.delete(salida.id)
       notify.success('Salida eliminada', 'La salida fue eliminada y el stock devuelto')
       cargarSalidas()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error al eliminar:', error)
-      notify.error('Error', error.response?.data?.message || 'Error al eliminar la salida')
+      const mensaje = (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      notify.error('Error', mensaje || 'Error al eliminar la salida')
     }
   }
 }
@@ -673,7 +750,7 @@ h2 {
 }
 
 .modal-consolidado {
-  max-width: 520px;
+  max-width: 760px;
 }
 
 .consolidado-info {
@@ -684,6 +761,70 @@ h2 {
   color: #5b2c6f;
   line-height: 1.45;
   font-size: 0.9em;
+}
+
+.vales-loading,
+.vales-vacio {
+  padding: 18px;
+  text-align: center;
+  color: #6c757d;
+  border: 1px dashed #c7cdd1;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.grupos-vales {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.grupo-vales {
+  border: 1px solid #ded4e5;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.grupo-vales-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: #f3e8f8;
+  color: #5b2c6f;
+}
+
+.grupo-vales-header label,
+.vale-seleccionable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.vale-seleccionable {
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-top: 1px solid #eee;
+  color: #34495e;
+}
+
+.vale-seleccionable input {
+  margin-right: 2px;
+}
+
+.vale-seleccionable span:last-child {
+  color: #7f8c8d;
+  font-size: 0.88em;
+}
+
+.seleccion-resumen {
+  margin: 0 0 15px;
+  color: #5b2c6f;
+  font-weight: 600;
 }
 
 .modal-small {

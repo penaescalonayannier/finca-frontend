@@ -14,6 +14,7 @@ export interface Salida {
   fincaName: string
   productoCode: string
   productoName: string
+  unidadMedida?: string
   stockActual: number
   fecha: string
   observaciones: string
