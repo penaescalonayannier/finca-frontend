@@ -57,6 +57,17 @@
           />
         </div>
 
+        <div class="form-group">
+          <label for="centroCosto">Centro de Costo (para contabilidad)</label>
+          <select id="centroCosto" v-model="form.centroCosto" :disabled="isLoadingCentros">
+            <option value="">{{ isLoadingCentros ? 'Cargando...' : 'Seleccione un centro de costo (opcional)' }}</option>
+            <option v-for="centro in centrosCosto" :key="centro.id" :value="centro.codigo">
+              {{ centro.codigo }} - {{ centro.nombre }}
+            </option>
+          </select>
+          <small class="hint">Ej: 700.01.04 para Plátano, 700.10.01 para Leche</small>
+        </div>
+
         <div v-if="mensaje" :class="['mensaje', mensajeTipo]">
           {{ mensaje }}
         </div>
@@ -99,8 +110,10 @@
 import { ref, computed, onMounted } from 'vue'
 import FincaService from '@/services/FincaService'
 import FincaProductoService from '@/services/FincaProductoService'
+import { CuentaContableService } from '@/services/ContabilidadService'
 import type { Finca } from '@/types/Finca'
 import type { FincaProducto } from '@/types/FincaProducto'
+import type { CuentaContable } from '@/types/Contabilidad'
 
 interface EntradaReciente {
   fincaName: string
@@ -111,8 +124,10 @@ interface EntradaReciente {
 
 const fincas = ref<Finca[]>([])
 const productosFinca = ref<FincaProducto[]>([])
+const centrosCosto = ref<CuentaContable[]>([])
 const isLoadingFincas = ref(false)
 const isLoadingProductos = ref(false)
+const isLoadingCentros = ref(false)
 const isRegistrando = ref(false)
 const mensaje = ref('')
 const mensajeTipo = ref<'success' | 'error'>('success')
@@ -122,7 +137,8 @@ const form = ref({
   fincaId: '',
   productoId: '',
   cantidad: 1,
-  descripcion: ''
+  descripcion: '',
+  centroCosto: ''
 })
 
 const productoSeleccionado = computed(() => {
@@ -150,6 +166,17 @@ const cargarFincas = async () => {
     mensajeTipo.value = 'error'
   } finally {
     isLoadingFincas.value = false
+  }
+}
+
+const cargarCentrosCosto = async () => {
+  isLoadingCentros.value = true
+  try {
+    centrosCosto.value = await CuentaContableService.getCentrosCosto()
+  } catch (error) {
+    console.error('Error al cargar centros de costo:', error)
+  } finally {
+    isLoadingCentros.value = false
   }
 }
 
@@ -192,7 +219,8 @@ const registrarEntrada = async () => {
       fincaId: form.value.fincaId,
       productoId: form.value.productoId,
       cantidad: form.value.cantidad,
-      descripcion: form.value.descripcion
+      descripcion: form.value.descripcion,
+      centroCosto: form.value.centroCosto || undefined
     })
 
     const resultado = response.data
@@ -245,7 +273,8 @@ const limpiarFormulario = () => {
     fincaId: '',
     productoId: '',
     cantidad: 1,
-    descripcion: ''
+    descripcion: '',
+    centroCosto: ''
   }
   productosFinca.value = []
   mensaje.value = ''
@@ -253,6 +282,7 @@ const limpiarFormulario = () => {
 
 onMounted(() => {
   cargarFincas()
+  cargarCentrosCosto()
 })
 </script>
 
@@ -325,6 +355,13 @@ h2 {
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.form-group .hint {
+  display: block;
+  margin-top: 5px;
+  color: #7f8c8d;
+  font-size: 0.85em;
 }
 
 .stock-actual {

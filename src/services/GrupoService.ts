@@ -1,34 +1,32 @@
 import axios from 'axios'
 import type { Grupo, CreateGrupoRequest, UpdateGrupoRequest, GrupoListResponse } from '@/types/Grupo'
 
-const api = axios.create({
-  baseURL: '/api'
-})
+const API_BASE_URL = '/api/grupo'
 
 const GrupoService = {
   // Create
   create(data: CreateGrupoRequest) {
-    return api.post<{ id: string }>('/grupo', data)
+    return axios.post<{ id: string }>(API_BASE_URL, data)
   },
 
   // Read
   getById(id: string) {
-    return api.get<Grupo>(`/grupo/${id}`)
+    return axios.get<Grupo>(`${API_BASE_URL}/${id}`)
   },
 
   // Update
   update(id: string, data: UpdateGrupoRequest) {
-    return api.put<Grupo>(`/grupo/${id}`, data)
+    return axios.put<Grupo>(`${API_BASE_URL}/${id}`, data)
   },
 
   // Delete
   delete(id: string) {
-    return api.delete(`/grupo/${id}`)
+    return axios.delete(`${API_BASE_URL}/${id}`)
   },
 
   // Search with pagination
   search(page = 0, size = 10, sortBy = 'nombre', sortType: 'ASC' | 'DES' = 'ASC') {
-    return api.post<GrupoListResponse>('/grupo/search', {
+    return axios.post<GrupoListResponse>(`${API_BASE_URL}/search`, {
       pageSize: size,
       page: page,
       sortBy: sortBy,
@@ -39,7 +37,7 @@ const GrupoService = {
 
   // Get all grupos (simple list without pagination)
   getAll() {
-    return api.post<GrupoListResponse>('/grupo/search', {
+    return axios.post<GrupoListResponse>(`${API_BASE_URL}/search`, {
       pageSize: 1000,
       page: 0,
       sortBy: 'nombre',
@@ -50,7 +48,7 @@ const GrupoService = {
 
   // Assign worker to group
   asignarTrabajador(grupoId: string, trabajadorId: string) {
-    return api.post(`/grupo/${grupoId}/asignar-trabajador`, {
+    return axios.post(`${API_BASE_URL}/${grupoId}/asignar-trabajador`, {
       trabajadorId
     })
   }

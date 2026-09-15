@@ -21,6 +21,11 @@ interface ImportResponse {
   count?: number
 }
 
+interface PreviewDesactivacionResponse {
+  id: string
+  advertencias: string[]
+}
+
 class TrabajadorService {
   crearTrabajador(trabajador: TrabajadorRequest): Promise<AxiosResponse<Trabajador>> {
     return axios.post(API_BASE_URL, trabajador)
@@ -44,7 +49,7 @@ class TrabajadorService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || 'createdAt',
+      sortBy: filtros.sortBy || 'nombre',
       sortType: filtros.sortType || 'DES'
     }
 
@@ -91,6 +96,16 @@ class TrabajadorService {
     return axios.post(`${API_BASE_URL}/${trabajadorId}/asignar-grupo`, {
       grupoId
     })
+  }
+
+  quitarGrupo(trabajadorId: string): Promise<AxiosResponse<any>> {
+    return axios.post(`${API_BASE_URL}/${trabajadorId}/asignar-grupo`, {
+      grupoId: null
+    })
+  }
+
+  previewDesactivacion(id: string): Promise<AxiosResponse<PreviewDesactivacionResponse>> {
+    return axios.get(`${API_BASE_URL}/${id}/preview-desactivacion`)
   }
 }
 

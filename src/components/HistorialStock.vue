@@ -288,7 +288,7 @@ const cargarMovimientos = async () => {
       query: searchQuery.value,
       filter: filters,
       sortBy: 'fecha',
-      sortType: 'DESC'
+      sortType: 'DES'
     })
 
     const data = response.data as Record<string, unknown>

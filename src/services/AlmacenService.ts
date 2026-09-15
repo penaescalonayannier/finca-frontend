@@ -1,7 +1,17 @@
 // src/services/AlmacenService.ts
 
 import axios, { AxiosResponse } from 'axios'
-import type { Almacen, AlmacenRequest, AlmacenProductoRequest } from '@/types/Almacen'
+import type {
+  Almacen,
+  AlmacenRequest,
+  AlmacenProductoRequest,
+  AlmacenFincaProducto,
+  EntradaAlmacenRequest,
+  SalidaAlmacenRequest,
+  TransferenciaAlmacenRequest,
+  AsignarProductoStockRequest,
+  StockOperationResponse
+} from '@/types/Almacen'
 import type { PagedResponse, SearchFilter } from '@/types/EstadoCuenta'
 
 const API_BASE_URL = '/api/almacen'
@@ -89,6 +99,70 @@ class AlmacenService {
    */
   obtenerProductosDeAlmacen(almacenId: string): Promise<AxiosResponse<Almacen>> {
     return axios.get(`${API_BASE_URL}/${almacenId}/productos`)
+  }
+
+  // ==================== STOCK POR ALMACÉN ====================
+
+  /**
+   * Obtener stock de todos los productos de un almacen
+   */
+  obtenerStockAlmacen(almacenId: string): Promise<AxiosResponse<AlmacenFincaProducto[]>> {
+    return axios.get(`${API_BASE_URL}/${almacenId}/stock`)
+  }
+
+  /** Obtener los almacenes que contienen un producto de finca */
+  obtenerAlmacenesPorFincaProducto(fincaProductoId: string): Promise<AxiosResponse<AlmacenFincaProducto[]>> {
+    return axios.get(`${API_BASE_URL}/finca-producto/${fincaProductoId}/almacenes`)
+  }
+
+  /**
+   * Obtener stock total del almacen
+   */
+  obtenerStockTotalAlmacen(almacenId: string): Promise<AxiosResponse<number>> {
+    return axios.get(`${API_BASE_URL}/${almacenId}/stock/total`)
+  }
+
+  // ==================== ENTRADAS ====================
+
+  /**
+   * Registrar entrada de stock en un almacen
+   */
+  entradaStock(almacenId: string, data: EntradaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/entrada`, data)
+  }
+
+  // ==================== SALIDAS ====================
+
+  /**
+   * Registrar salida de stock de un almacen
+   */
+  salidaStock(almacenId: string, data: SalidaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/salida`, data)
+  }
+
+  // ==================== TRANSFERENCIAS ====================
+
+  /**
+   * Transferir stock entre almacenes
+   */
+  transferirStock(almacenId: string, data: TransferenciaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/transferir`, data)
+  }
+
+  /**
+   * Obtener almacenes destino disponibles para transferencia
+   */
+  obtenerDestinosDisponibles(almacenId: string, fincaProductoId: string): Promise<AxiosResponse<AlmacenFincaProducto[]>> {
+    return axios.get(`${API_BASE_URL}/${almacenId}/productos/${fincaProductoId}/destinos-disponibles`)
+  }
+
+  // ==================== ASIGNAR CON STOCK ====================
+
+  /**
+   * Asignar producto a almacen con stock inicial
+   */
+  asignarProductoConStock(almacenId: string, data: AsignarProductoStockRequest): Promise<AxiosResponse<{ id: string }>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/asignar-producto`, data)
   }
 }
 

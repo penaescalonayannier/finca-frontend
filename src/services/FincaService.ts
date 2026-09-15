@@ -75,6 +75,25 @@ class FincaService {
   obtenerFincaPorCodigo(code: string): Promise<AxiosResponse<Finca>> {
     return axios.get(`${API_BASE_URL}/code/${code}`)
   }
+
+  /**
+   * Get all active fincas (for admin finca selector)
+   */
+  obtenerTodasLasFincas(): Promise<AxiosResponse<PagedResponse<Finca>>> {
+    return this.buscarFincas({ size: 100, page: 0, sortBy: 'name', sortType: 'ASC' })
+  }
+
+  /**
+   * Alias for obtenerTodasLasFincas - returns all fincas for dropdowns
+   */
+  async getAll(): Promise<AxiosResponse<Finca[]>> {
+    const response = await this.buscarFincas({ size: 100, page: 0, sortBy: 'name', sortType: 'ASC' })
+    // Transform PagedResponse to array for simpler consumption
+    return {
+      ...response,
+      data: response.data?.content || []
+    } as AxiosResponse<Finca[]>
+  }
 }
 
 export default new FincaService()

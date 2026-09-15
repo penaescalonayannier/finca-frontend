@@ -15,7 +15,25 @@ interface SearchParams {
   sortType?: 'ASC' | 'DES'
 }
 
+export interface AjusteStockRequest {
+  almacenId: string
+  fincaProductoId: string
+  tipoMovimiento: 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE'
+  cantidad: number
+  observaciones: string
+}
+
+export interface AjusteStockResponse {
+  id: string
+  stockAnterior: number
+  stockNuevo: number
+}
+
 class MovimientoStockService {
+  crearAjuste(data: AjusteStockRequest): Promise<AxiosResponse<AjusteStockResponse>> {
+    return axios.post(`${API_BASE_URL}/ajuste`, data)
+  }
+
   /**
    * Búsqueda paginada de movimientos de stock
    */
@@ -69,6 +87,63 @@ class MovimientoStockService {
       params: { fechaInicio, fechaFin }
     })
   }
+
+  /**
+   * Obtener reporte consolidado de movimientos por rango de fechas
+   * Agrupa entradas por producto y salidas por destino
+   */
+  getConsolidado(
+    fechaInicio: string,
+    fechaFin: string,
+    fincaId?: string
+  ): Promise<AxiosResponse<ReporteConsolidado>> {
+    const params: Record<string, string> = { fechaInicio, fechaFin }
+    if (fincaId) {
+      params.fincaId = fincaId
+    }
+    return axios.get(`${API_BASE_URL}/consolidado`, { params })
+  }
+}
+
+// Types for consolidated report
+export interface EntradaDetalle {
+  tipo: string
+  cantidad: number
+  descripcion: string
+}
+
+export interface EntradaPorProducto {
+  productoCode: string
+  productoName: string
+  unidadMedida: string
+  cantidadTotal: number
+  detalles: EntradaDetalle[]
+}
+
+export interface SalidaProductoDetalle {
+  productoCode: string
+  productoName: string
+  cantidad: number
+  precio: number
+  valorTotal: number
+}
+
+export interface SalidaPorDestino {
+  destino: string
+  destinoNombre: string
+  cantidadTotal: number
+  valorTotal: number
+  productos: SalidaProductoDetalle[]
+}
+
+export interface ReporteConsolidado {
+  fechaInicio: string
+  fechaFin: string
+  totalEntradas: number
+  totalSalidas: number
+  entradasPorProducto: EntradaPorProducto[]
+  salidasPorDestino: SalidaPorDestino[]
+  entradasPorTipo: Record<string, number>
 }
 
 export default new MovimientoStockService()

@@ -45,7 +45,7 @@ class ProductoService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || 'createdAt',
+      sortBy: filtros.sortBy || 'name',
       sortType: filtros.sortType || 'DES'
     }
 

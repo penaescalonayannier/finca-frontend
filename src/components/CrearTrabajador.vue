@@ -38,18 +38,63 @@
         />
       </div>
 
-      <div v-if="isEditing" class="form-group">
-        <label for="cargo">Cargo</label>
-        <div v-if="cargosDisponibles.length === 0" class="loading-cargos">
+      <div class="form-group">
+        <label for="finca">Finca *</label>
+        <div v-if="fincasDisponibles.length === 0" class="loading-cargos">
+          Cargando fincas...
+        </div>
+        <select
+          v-else
+          id="finca"
+          v-model="form.fincaId"
+          class="form-select"
+          required
+        >
+          <option value="">Seleccionar finca</option>
+          <option v-for="finca in fincasDisponibles" :key="finca.id" :value="String(finca.id)">
+            {{ finca.code }} - {{ finca.name }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="grupo">Grupo *</label>
+        <div v-if="gruposLoading" class="loading-cargos">
+          Cargando grupos...
+        </div>
+        <div v-else-if="gruposDisponibles.length === 0" class="loading-cargos">
+          No hay grupos disponibles
+        </div>
+        <select
+          v-else
+          id="grupo"
+          v-model="form.grupoId"
+          class="form-select"
+          required
+        >
+          <option value="">Seleccionar grupo</option>
+          <option v-for="grupo in gruposDisponibles" :key="grupo.id" :value="String(grupo.id)">
+            {{ grupo.nombre }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="cargo">Cargo *</label>
+        <div v-if="cargosLoading" class="loading-cargos">
           Cargando cargos...
+        </div>
+        <div v-else-if="cargosDisponibles.length === 0" class="loading-cargos">
+          No hay cargos disponibles
         </div>
         <select
           v-else
           id="cargo"
           v-model="form.cargoId"
           class="form-select"
+          required
         >
-          <option value="">Sin asignar</option>
+          <option value="">Seleccionar cargo</option>
           <option v-for="cargo in cargosDisponibles" :key="cargo.id" :value="String(cargo.id)">
             {{ cargo.name }}
           </option>
@@ -82,8 +127,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import TrabajadorService from '@/services/TrabajadorService'
 import CargoService from '@/services/CargoService'
+import FincaService from '@/services/FincaService'
+import GrupoService from '@/services/GrupoService'
 import type { Trabajador, TrabajadorRequest } from '@/types/Trabajador'
 import type { CargoEntity } from '@/types/Cargo'
+import type { Finca } from '@/types/Finca'
+import type { Grupo } from '@/types/Grupo'
 import type { AxiosError } from 'axios'
 
 const props = defineProps<{
@@ -98,79 +147,82 @@ const emit = defineEmits<{
 
 const isEditing = computed(() => !!props.trabajador?.id)
 const isGuardando = ref(false)
+const cargosLoading = ref(true)
+const gruposLoading = ref(true)
 const cargosDisponibles = ref<CargoEntity[]>([])
-const cargoIdOriginal = ref<string | undefined>()
+const fincasDisponibles = ref<Finca[]>([])
+const gruposDisponibles = ref<Grupo[]>([])
 
-const form = ref<TrabajadorRequest & { cargoId?: string }>({
+const form = ref<TrabajadorRequest>({
   ruc: '',
   nombre: '',
   cuenta: '',
-  activo: true,
-  cargoId: undefined
+  fincaId: undefined,
+  grupoId: undefined,
+  cargoId: undefined,
+  activo: true
 })
 
 const cargarCargos = async () => {
+  cargosLoading.value = true
   try {
-    console.log('[cargarCargos] Iniciando carga de cargos...')
     const response = await CargoService.getAll()
-    console.log('[cargarCargos] Respuesta completa:', response)
-    console.log('[cargarCargos] response.data:', response.data)
-
-    // response.data es un objeto con data, totalPages, etc.
     const cargosArray = response.data.data || response.data || []
-    console.log('[cargarCargos] Array de cargos extraído:', cargosArray)
-
     cargosDisponibles.value = cargosArray
-    console.log('[cargarCargos] ✅ Cargos cargados correctamente:', cargosDisponibles.value.length, 'cargos')
-    cargosDisponibles.value.forEach(c => {
-      console.log(`  - ${c.id}: ${c.name}`)
-    })
   } catch (error) {
-    console.error('[cargarCargos] ❌ Error al cargar cargos:', error)
+    console.error('[cargarCargos] Error al cargar cargos:', error)
     cargosDisponibles.value = []
+  } finally {
+    cargosLoading.value = false
+  }
+}
+
+const cargarFincas = async () => {
+  try {
+    const response = await FincaService.buscarFincas({ size: 1000, page: 0, sortBy: 'name', sortType: 'ASC' })
+    const fincasArray = response.data.data || response.data || []
+    fincasDisponibles.value = fincasArray
+  } catch (error) {
+    console.error('[cargarFincas] Error al cargar fincas:', error)
+    fincasDisponibles.value = []
+  }
+}
+
+const cargarGrupos = async () => {
+  gruposLoading.value = true
+  try {
+    const response = await GrupoService.getAll()
+    const gruposArray = response.data.data || response.data || []
+    gruposDisponibles.value = gruposArray
+  } catch (error) {
+    console.error('[cargarGrupos] Error al cargar grupos:', error)
+    gruposDisponibles.value = []
+  } finally {
+    gruposLoading.value = false
   }
 }
 
 const cargarDatos = () => {
-  console.log('[cargarDatos] Iniciando...')
-  console.log('[cargarDatos] props.trabajador:', props.trabajador)
-  console.log('[cargarDatos] Cargos disponibles:', cargosDisponibles.value.length)
-
   if (!props.trabajador) {
-    console.log('[cargarDatos] props.trabajador es null/undefined, saliendo')
     return
   }
 
   const cargoId = props.trabajador.cargoId ? String(props.trabajador.cargoId) : ''
-  console.log('[cargarDatos] CargoId del trabajador:', cargoId)
+  const fincaId = props.trabajador.fincaId ? String(props.trabajador.fincaId) : ''
+  const grupoId = props.trabajador.grupoId ? String(props.trabajador.grupoId) : ''
 
   form.value = {
     ruc: props.trabajador.ruc || '',
     nombre: props.trabajador.nombre || '',
     cuenta: props.trabajador.cuenta || '',
-    activo: props.trabajador.activo !== false,
-    cargoId: cargoId
-  }
-  cargoIdOriginal.value = cargoId
-
-  console.log('[cargarDatos] Formulario actualizado:', form.value)
-
-  // Verificar si el cargoId existe en los cargos disponibles
-  if (cargoId && cargosDisponibles.value.length > 0) {
-    const cargoEncontrado = cargosDisponibles.value.find(c => String(c.id) === cargoId)
-    if (cargoEncontrado) {
-      console.log('[cargarDatos] ✅ CARGO ENCONTRADO EN LISTA:', cargoEncontrado.name)
-    } else {
-      console.log('[cargarDatos] ❌ CARGO NO ENCONTRADO en lista. CargoId buscado:', cargoId)
-      console.log('[cargarDatos] IDs disponibles:', cargosDisponibles.value.map(c => String(c.id)))
-    }
-  } else {
-    console.log('[cargarDatos] CargoId vacío o no hay cargos disponibles')
+    fincaId: fincaId,
+    grupoId: grupoId,
+    cargoId: cargoId,
+    activo: props.trabajador.activo !== false
   }
 }
 
 const guardar = async () => {
-  // Validaciones
   if (!form.value.ruc.trim()) {
     alert('El RUC es obligatorio')
     return
@@ -183,29 +235,26 @@ const guardar = async () => {
     alert('La cuenta es obligatoria')
     return
   }
+  if (!form.value.fincaId) {
+    alert('La finca es obligatoria')
+    return
+  }
+  if (!form.value.grupoId) {
+    alert('El grupo es obligatorio')
+    return
+  }
+  if (!form.value.cargoId) {
+    alert('El cargo es obligatorio')
+    return
+  }
 
   isGuardando.value = true
   try {
     if (isEditing.value && props.trabajador?.id) {
-      // Crear objeto sin cargoId para enviar al backend
-      const { cargoId, ...trabajadorData } = form.value
-      await TrabajadorService.actualizarTrabajador(props.trabajador.id, trabajadorData)
-
-      // IMPORTANTE: Siempre asignar el cargo (incluso si no cambió)
-      // para evitar que se pierda la referencia del cargo
-      const cargoAAsignar = form.value.cargoId || ''
-      console.log('Asignando cargo:', cargoAAsignar, 'al trabajador:', props.trabajador.id)
-
-      if (cargoAAsignar) {
-        await TrabajadorService.asignarCargo(props.trabajador.id, cargoAAsignar)
-        console.log('Cargo asignado correctamente')
-      } else {
-        console.warn('No hay cargo para asignar')
-      }
+      await TrabajadorService.actualizarTrabajador(props.trabajador.id, form.value)
       emit('updated')
     } else {
-      const { cargoId, ...trabajadorData } = form.value
-      await TrabajadorService.crearTrabajador(trabajadorData)
+      await TrabajadorService.crearTrabajador(form.value)
       emit('created')
     }
   } catch (error) {
@@ -223,42 +272,30 @@ const cancelar = () => {
 }
 
 onMounted(async () => {
-  console.log('[onMounted] Componente montado, pre-cargando cargos...')
-  await cargarCargos()
-  console.log('[onMounted] Cargos pre-cargados, ahora el watch puede usarlos')
+  await Promise.all([cargarCargos(), cargarFincas(), cargarGrupos()])
 })
 
 watch(
   () => props.trabajador,
   async (newVal) => {
-    console.log('[Watch] Props trabajador cambió:', newVal?.id)
     if (newVal) {
-      console.log('[Watch] Trabajador existe')
-      console.log('[Watch] Cargos disponibles en este momento:', cargosDisponibles.value.length)
-
-      // Si los cargos aún no se han cargado (onMounted todavía no terminó), cargarlos ahora
-      if (cargosDisponibles.value.length === 0) {
-        console.log('[Watch] Cargos no cargados, cargando ahora...')
-        await cargarCargos()
+      if (cargosDisponibles.value.length === 0 || fincasDisponibles.value.length === 0 || gruposDisponibles.value.length === 0) {
+        await Promise.all([cargarCargos(), cargarFincas(), cargarGrupos()])
       }
-
-      // Ahora los cargos están disponibles, cargar datos del trabajador
-      console.log('[Watch] Llamando a cargarDatos()...')
       cargarDatos()
-      console.log('[Watch] Datos cargados exitosamente')
     } else {
-      console.log('[Watch] Trabajador es null/undefined, inicializando formulario vacío')
       form.value = {
         ruc: '',
         nombre: '',
         cuenta: '',
-        activo: true,
-        cargoId: ''
+        fincaId: '',
+        grupoId: '',
+        cargoId: '',
+        activo: true
       }
-      cargoIdOriginal.value = ''
     }
   },
-  { immediate: true }  // IMPORTANTE: Se dispara cuando el componente se monta
+  { immediate: true }
 )
 </script>
 

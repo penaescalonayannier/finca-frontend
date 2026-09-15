@@ -8,7 +8,7 @@
     <div class="estado-info">
       <div class="info-card">
         <div class="info-label">Total Trabajadores</div>
-        <div class="info-value">{{ totalElementos }}</div>
+        <div class="info-value">{{ totalGlobal }}</div>
       </div>
       <div class="info-card activos">
         <div class="info-label">Activos</div>
@@ -40,6 +40,12 @@
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
       <button @click="mostrarModalCrear = true" class="btn-crear">Nuevo Trabajador</button>
       <button @click="mostrarModalImportar = true" class="btn-importar">Importar CSV/Excel</button>
+      <button @click="exportarPdfPorCargo" class="btn-pdf" :disabled="isExportandoPdf">
+        {{ isExportandoPdf ? 'Generando...' : 'PDF por Cargo' }}
+      </button>
+      <button @click="exportarPdfPorGrupo" class="btn-pdf-grupo" :disabled="isExportandoPdfGrupo">
+        {{ isExportandoPdfGrupo ? 'Generando...' : 'PDF por Grupo' }}
+      </button>
       <button v-if="trabajadoresSeleccionados.length > 0" @click="exportarTrabajadores" class="btn-exportar">
         Exportar ({{ trabajadoresSeleccionados.length }})
       </button>
@@ -62,7 +68,7 @@
           <th>RUC</th>
           <th>Nombre</th>
           <th>Cuenta</th>
-          <th>Cargo</th>
+          <th>Grupo</th>
           <th>Estado</th>
           <th>Acciones</th>
         </tr>
@@ -82,10 +88,13 @@
             />
           </td>
           <td>{{ trabajador.ruc }}</td>
-          <td>{{ trabajador.nombre }}</td>
+          <td class="nombre-cell">
+            <span class="nombre-principal">{{ trabajador.nombre }}</span>
+            <span v-if="trabajador.cargoName" class="cargo-subtexto">{{ trabajador.cargoName }}</span>
+          </td>
           <td>{{ trabajador.cuenta }}</td>
           <td>
-            <span class="cargo-badge">{{ trabajador.cargoName || '-' }}</span>
+            <span class="grupo-badge">{{ trabajador.grupoNombre || '-' }}</span>
           </td>
           <td>
             <span :class="['estado-badge', trabajador.activo ? 'activo' : 'inactivo']">
@@ -93,6 +102,7 @@
             </span>
           </td>
           <td class="acciones">
+            <button @click="verDetalles(trabajador)" class="btn-ver">Ver</button>
             <button @click="editarTrabajador(trabajador)" class="btn-editar">Editar</button>
             <button @click="confirmarEliminar(trabajador)" class="btn-eliminar">Eliminar</button>
           </td>
@@ -183,6 +193,129 @@
       </div>
     </div>
 
+    <!-- Modal Ver Detalles -->
+    <div v-if="mostrarModalDetalles" class="modal">
+      <div class="modal-content modal-detalles">
+        <span class="close" @click="mostrarModalDetalles = false">&times;</span>
+
+        <div v-if="trabajadorDetalles" class="detalles-wrapper">
+          <!-- Header con avatar e info principal -->
+          <div class="detalles-header">
+            <div class="avatar">
+              {{ trabajadorDetalles.nombre?.charAt(0)?.toUpperCase() || 'T' }}
+            </div>
+            <div class="header-info">
+              <h3 class="nombre">{{ trabajadorDetalles.nombre }}</h3>
+              <span class="ruc">RUC: {{ trabajadorDetalles.ruc }}</span>
+              <span :class="['estado-badge-header', trabajadorDetalles.activo ? 'activo' : 'inactivo']">
+                {{ trabajadorDetalles.activo ? 'Activo' : 'Inactivo' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Grid de información -->
+          <div class="detalles-grid">
+            <div class="detalle-card">
+              <div class="detalle-icon">💳</div>
+              <div class="detalle-info">
+                <span class="detalle-label">Cuenta</span>
+                <span class="detalle-value">{{ trabajadorDetalles.cuenta }}</span>
+              </div>
+            </div>
+
+            <div class="detalle-card">
+              <div class="detalle-icon">🏡</div>
+              <div class="detalle-info">
+                <span class="detalle-label">Finca</span>
+                <span class="detalle-value" v-if="trabajadorDetalles.fincaName">
+                  {{ trabajadorDetalles.fincaCode }} - {{ trabajadorDetalles.fincaName }}
+                </span>
+                <span class="detalle-value sin-asignar" v-else>Sin asignar</span>
+              </div>
+            </div>
+
+            <div class="detalle-card">
+              <div class="detalle-icon">👥</div>
+              <div class="detalle-info">
+                <span class="detalle-label">Grupo</span>
+                <span class="detalle-value" v-if="trabajadorDetalles.grupoNombre">
+                  {{ trabajadorDetalles.grupoNombre }}
+                </span>
+                <span class="detalle-value sin-asignar" v-else>Sin asignar</span>
+              </div>
+            </div>
+
+            <div class="detalle-card">
+              <div class="detalle-icon">👔</div>
+              <div class="detalle-info">
+                <span class="detalle-label">Cargo</span>
+                <span class="detalle-value" v-if="trabajadorDetalles.cargoName">
+                  {{ trabajadorDetalles.cargoName }}
+                </span>
+                <span class="detalle-value sin-asignar" v-else>Sin asignar</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Acciones -->
+          <div class="detalles-actions">
+            <button @click="editarDesdeDetalles" class="btn-action btn-editar-detail">
+              <span class="btn-icon">✏️</span> Editar
+            </button>
+            <button @click="mostrarModalDetalles = false" class="btn-action btn-cerrar">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Advertencias de Desactivación -->
+    <div v-if="mostrarModalAdvertencias" class="modal">
+      <div class="modal-content modal-advertencias">
+        <span class="close" @click="cerrarModalAdvertencias">&times;</span>
+
+        <div class="advertencias-header">
+          <div class="warning-icon">⚠️</div>
+          <h3>Desactivar Trabajador</h3>
+        </div>
+
+        <div class="advertencias-content">
+          <p class="trabajador-nombre" v-if="trabajadorADesactivar">
+            <strong>{{ trabajadorADesactivar.nombre }}</strong>
+            <span class="ruc-info">(RUC: {{ trabajadorADesactivar.ruc }})</span>
+          </p>
+
+          <div v-if="advertenciasDesactivacion.length > 0" class="advertencias-lista">
+            <p class="advertencias-titulo">Se encontraron las siguientes situaciones:</p>
+            <ul>
+              <li v-for="(advertencia, index) in advertenciasDesactivacion" :key="index" class="advertencia-item">
+                {{ advertencia }}
+              </li>
+            </ul>
+          </div>
+
+          <div v-else class="sin-advertencias">
+            <span class="check-icon">✅</span>
+            <p>No se encontraron situaciones pendientes para este trabajador.</p>
+          </div>
+
+          <p class="confirmacion-texto">
+            ¿Está seguro que desea desactivar este trabajador?
+          </p>
+        </div>
+
+        <div class="advertencias-actions">
+          <button @click="cerrarModalAdvertencias" class="btn-cancelar-adv">
+            Cancelar
+          </button>
+          <button @click="confirmarDesactivacion" class="btn-confirmar-adv">
+            Sí, desactivar
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -194,6 +327,8 @@ import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Trabajador } from '@/types/Trabajador'
 import type { SearchFilter } from '@/types/EstadoCuenta'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const trabajadores = ref<Trabajador[]>([])
 const searchQuery = ref('')
@@ -206,11 +341,19 @@ const totalInactivos = ref(0)
 const isLoading = ref(false)
 const trabajadoresSeleccionados = ref<string[]>([])
 const isExportando = ref(false)
+const isExportandoPdf = ref(false)
+const isExportandoPdfGrupo = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
 const mostrarModalImportar = ref(false)
+const mostrarModalDetalles = ref(false)
+const mostrarModalAdvertencias = ref(false)
 const trabajadorEditando = ref<Trabajador | null>(null)
+const trabajadorDetalles = ref<Trabajador | null>(null)
+const trabajadorADesactivar = ref<Trabajador | null>(null)
+const advertenciasDesactivacion = ref<string[]>([])
+const isLoadingAdvertencias = ref(false)
 
 // Importar
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -222,9 +365,11 @@ const mensajeImportTipo = ref<'info' | 'success' | 'error'>('info')
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
+const totalGlobal = computed(() => totalActivos.value + totalInactivos.value)
+
 const porcentajeActivos = computed(() => {
-  if (totalElementos.value === 0) return 0
-  return Math.round((totalActivos.value / totalElementos.value) * 100)
+  if (totalGlobal.value === 0) return 0
+  return Math.round((totalActivos.value / totalGlobal.value) * 100)
 })
 
 const todosSeleccionados = computed(() => {
@@ -297,27 +442,24 @@ const cargarTrabajadores = async () => {
 
 const cargarEstadisticas = async () => {
   try {
-    // Obtener totales sin filtro para mostrar las estadísticas globales
-    const response = await TrabajadorService.buscarTrabajadores({
+    // Contar activos
+    const responseActivos = await TrabajadorService.buscarTrabajadores({
       page: 0,
-      size: 1000,
-      query: searchQuery.value,
-      filter: [],
+      size: 1,
+      filter: [{ key: 'activo', operator: 'EQUALS', value: 'true', logicalOperation: 'AND' }],
     })
+    const dataActivos = responseActivos.data as Record<string, unknown>
+    totalActivos.value = Number(dataActivos.totalElements) || 0
 
-    const data = response.data as Record<string, unknown>
-    let todosTrabajadores: Trabajador[] = []
+    // Contar inactivos
+    const responseInactivos = await TrabajadorService.buscarTrabajadores({
+      page: 0,
+      size: 1,
+      filter: [{ key: 'activo', operator: 'EQUALS', value: 'false', logicalOperation: 'AND' }],
+    })
+    const dataInactivos = responseInactivos.data as Record<string, unknown>
+    totalInactivos.value = Number(dataInactivos.totalElements) || 0
 
-    if (data.data && Array.isArray(data.data)) {
-      todosTrabajadores = (data.data as Trabajador[]) || []
-    } else if (data.content && Array.isArray(data.content)) {
-      todosTrabajadores = (data.content as Trabajador[]) || []
-    } else if (Array.isArray(data)) {
-      todosTrabajadores = data as Trabajador[]
-    }
-
-    totalActivos.value = todosTrabajadores.filter(t => t.activo === true).length
-    totalInactivos.value = todosTrabajadores.filter(t => t.activo === false).length
   } catch (error) {
     console.error('Error al cargar estadísticas:', error)
   }
@@ -340,15 +482,33 @@ const cambiarTamanoPagina = () => {
   cargarTrabajadores()
 }
 
+const verDetalles = async (trabajador: Trabajador) => {
+  if (!trabajador.id) return
+
+  try {
+    const response = await TrabajadorService.obtenerTrabajadorPorId(trabajador.id)
+    trabajadorDetalles.value = response.data
+    mostrarModalDetalles.value = true
+  } catch (error) {
+    console.error('Error al cargar detalles:', error)
+    notify.error('Error', 'No se pudo cargar los detalles')
+  }
+}
+
+const editarDesdeDetalles = () => {
+  if (trabajadorDetalles.value) {
+    trabajadorEditando.value = trabajadorDetalles.value
+    mostrarModalDetalles.value = false
+    mostrarModalEditar.value = true
+  }
+}
+
 const editarTrabajador = async (trabajador: Trabajador) => {
   if (!trabajador.id) return
 
   try {
-    // Obtener los datos completos del trabajador incluyendo cargoId
-    console.log('Obteniendo datos completos del trabajador:', trabajador.id)
     const response = await TrabajadorService.obtenerTrabajadorPorId(trabajador.id)
     trabajadorEditando.value = response.data
-    console.log('Trabajador cargado para editar:', trabajadorEditando.value)
     mostrarModalEditar.value = true
   } catch (error) {
     console.error('Error al cargar el trabajador para editar:', error)
@@ -357,18 +517,54 @@ const editarTrabajador = async (trabajador: Trabajador) => {
 }
 
 const confirmarEliminar = async (trabajador: Trabajador) => {
-  const confirmed = await confirmDialog.delete(trabajador.nombre)
+  if (!trabajador.id) return
 
-  if (confirmed) {
+  // Solo mostrar advertencias si el trabajador está activo
+  if (trabajador.activo) {
+    isLoadingAdvertencias.value = true
     try {
-      await TrabajadorService.eliminarTrabajador(trabajador.id!)
-      notify.success('Trabajador eliminado', 'El trabajador fue eliminado correctamente')
-      cargarTrabajadores()
+      const response = await TrabajadorService.previewDesactivacion(trabajador.id)
+      advertenciasDesactivacion.value = response.data.advertencias || []
+      trabajadorADesactivar.value = trabajador
+      mostrarModalAdvertencias.value = true
     } catch (error) {
-      console.error('Error al eliminar:', error)
-      notify.error('Error', 'No se pudo eliminar el trabajador')
+      console.error('Error al obtener advertencias:', error)
+      // Si falla el preview, mostrar confirmación simple
+      const confirmed = await confirmDialog.delete(trabajador.nombre)
+      if (confirmed) {
+        await ejecutarDesactivacion(trabajador)
+      }
+    } finally {
+      isLoadingAdvertencias.value = false
     }
+  } else {
+    // Si ya está inactivo, preguntar si quiere eliminarlo permanentemente
+    notify.warning('Trabajador inactivo', 'Este trabajador ya está desactivado')
   }
+}
+
+const ejecutarDesactivacion = async (trabajador: Trabajador) => {
+  try {
+    await TrabajadorService.eliminarTrabajador(trabajador.id!)
+    notify.success('Trabajador desactivado', 'El trabajador fue desactivado correctamente')
+    cargarTrabajadores()
+  } catch (error) {
+    console.error('Error al desactivar:', error)
+    notify.error('Error', 'No se pudo desactivar el trabajador')
+  }
+}
+
+const confirmarDesactivacion = async () => {
+  if (trabajadorADesactivar.value) {
+    await ejecutarDesactivacion(trabajadorADesactivar.value)
+    cerrarModalAdvertencias()
+  }
+}
+
+const cerrarModalAdvertencias = () => {
+  mostrarModalAdvertencias.value = false
+  trabajadorADesactivar.value = null
+  advertenciasDesactivacion.value = []
 }
 
 const handleTrabajadorCreado = () => {
@@ -492,6 +688,304 @@ const exportarTrabajadores = async () => {
   }
 }
 
+const exportarPdfPorCargo = async () => {
+  isExportandoPdf.value = true
+  try {
+    // Obtener todos los trabajadores activos
+    const response = await TrabajadorService.buscarTrabajadores({
+      page: 0,
+      size: 10000,
+      filter: [{ key: 'activo', operator: 'EQUALS', value: 'true', logicalOperation: 'AND' }]
+    })
+
+    const data = response.data as Record<string, unknown>
+    let todosTrabajadores: Trabajador[] = []
+
+    if (data.data && Array.isArray(data.data)) {
+      todosTrabajadores = data.data as Trabajador[]
+    } else if (data.content && Array.isArray(data.content)) {
+      todosTrabajadores = data.content as Trabajador[]
+    }
+
+    if (todosTrabajadores.length === 0) {
+      notify.warning('Sin datos', 'No hay trabajadores para exportar')
+      return
+    }
+
+    // Agrupar por cargo
+    const porCargo = new Map<string, Trabajador[]>()
+    todosTrabajadores.forEach(t => {
+      const cargo = t.cargoName || 'Sin Cargo Asignado'
+      if (!porCargo.has(cargo)) {
+        porCargo.set(cargo, [])
+      }
+      porCargo.get(cargo)!.push(t)
+    })
+
+    // Ordenar cargos alfabéticamente
+    const cargosOrdenados = Array.from(porCargo.keys()).sort()
+
+    // Crear PDF
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    let yPos = 20
+
+    // Título principal
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Listado de Trabajadores por Cargo', pageWidth / 2, yPos, { align: 'center' })
+    yPos += 8
+
+    // Fecha de generación
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    const fechaActual = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    doc.text(`Generado: ${fechaActual}`, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 5
+
+    // Total general
+    doc.text(`Total de trabajadores: ${todosTrabajadores.length}`, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 10
+
+    // Generar tabla por cada cargo
+    cargosOrdenados.forEach((cargo, index) => {
+      const trabajadoresCargo = porCargo.get(cargo)!.sort((a, b) =>
+        (a.nombre || '').localeCompare(b.nombre || '')
+      )
+
+      // Verificar si necesitamos nueva página
+      if (yPos > 250) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Encabezado del cargo
+      doc.setFillColor(52, 73, 94)
+      doc.rect(14, yPos - 5, pageWidth - 28, 8, 'F')
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text(`${cargo} (${trabajadoresCargo.length})`, 16, yPos)
+      doc.setTextColor(0, 0, 0)
+      yPos += 8
+
+      // Tabla de trabajadores
+      const tableData = trabajadoresCargo.map((t, i) => [
+        (i + 1).toString(),
+        t.ruc || '',
+        t.nombre || '',
+        t.cuenta || '',
+        t.fincaName || '-'
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['#', 'RUC', 'Nombre', 'Cuenta', 'Finca']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [149, 165, 166],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9
+        },
+        bodyStyles: {
+          fontSize: 8
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 55 },
+          3: { cellWidth: 30 },
+          4: { cellWidth: 40 }
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: () => {
+          // Pie de página
+          doc.setFontSize(8)
+          doc.setTextColor(128, 128, 128)
+          doc.text(
+            `Página ${doc.getNumberOfPages()}`,
+            pageWidth / 2,
+            doc.internal.pageSize.getHeight() - 10,
+            { align: 'center' }
+          )
+          doc.setTextColor(0, 0, 0)
+        }
+      })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      yPos = (doc as any).lastAutoTable.finalY + 15
+    })
+
+    // Descargar PDF
+    doc.save(`trabajadores_por_cargo_${new Date().getTime()}.pdf`)
+    notify.success('PDF generado', 'El archivo se descargó correctamente')
+
+  } catch (error) {
+    console.error('Error al generar PDF:', error)
+    notify.error('Error', 'No se pudo generar el PDF')
+  } finally {
+    isExportandoPdf.value = false
+  }
+}
+
+const exportarPdfPorGrupo = async () => {
+  isExportandoPdfGrupo.value = true
+  try {
+    // Obtener todos los trabajadores activos
+    const response = await TrabajadorService.buscarTrabajadores({
+      page: 0,
+      size: 10000,
+      filter: [{ key: 'activo', operator: 'EQUALS', value: 'true', logicalOperation: 'AND' }]
+    })
+
+    const data = response.data as Record<string, unknown>
+    let todosTrabajadores: Trabajador[] = []
+
+    if (data.data && Array.isArray(data.data)) {
+      todosTrabajadores = data.data as Trabajador[]
+    } else if (data.content && Array.isArray(data.content)) {
+      todosTrabajadores = data.content as Trabajador[]
+    }
+
+    if (todosTrabajadores.length === 0) {
+      notify.warning('Sin datos', 'No hay trabajadores para exportar')
+      return
+    }
+
+    // Agrupar por grupo
+    const porGrupo = new Map<string, Trabajador[]>()
+    todosTrabajadores.forEach(t => {
+      const grupo = t.grupoNombre || 'Sin Grupo Asignado'
+      if (!porGrupo.has(grupo)) {
+        porGrupo.set(grupo, [])
+      }
+      porGrupo.get(grupo)!.push(t)
+    })
+
+    // Ordenar grupos alfabéticamente
+    const gruposOrdenados = Array.from(porGrupo.keys()).sort()
+
+    // Crear PDF
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    let yPos = 20
+
+    // Título principal
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Listado de Trabajadores por Grupo', pageWidth / 2, yPos, { align: 'center' })
+    yPos += 8
+
+    // Fecha de generación
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    const fechaActual = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    doc.text(`Generado: ${fechaActual}`, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 5
+
+    // Total general
+    doc.text(`Total de trabajadores: ${todosTrabajadores.length}`, pageWidth / 2, yPos, { align: 'center' })
+    yPos += 10
+
+    // Generar tabla por cada grupo
+    gruposOrdenados.forEach((grupo) => {
+      const trabajadoresGrupo = porGrupo.get(grupo)!.sort((a, b) =>
+        (a.nombre || '').localeCompare(b.nombre || '')
+      )
+
+      // Verificar si necesitamos nueva página
+      if (yPos > 250) {
+        doc.addPage()
+        yPos = 20
+      }
+
+      // Encabezado del grupo
+      doc.setFillColor(39, 174, 96)
+      doc.rect(14, yPos - 5, pageWidth - 28, 8, 'F')
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text(`${grupo} (${trabajadoresGrupo.length})`, 16, yPos)
+      doc.setTextColor(0, 0, 0)
+      yPos += 8
+
+      // Tabla de trabajadores
+      const tableData = trabajadoresGrupo.map((t, i) => [
+        (i + 1).toString(),
+        t.ruc || '',
+        t.nombre || '',
+        t.cuenta || '',
+        t.fincaName || '-',
+        t.cargoName || '-'
+      ])
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['#', 'RUC', 'Nombre', 'Cuenta', 'Finca', 'Cargo']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [46, 204, 113],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9
+        },
+        bodyStyles: {
+          fontSize: 8
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 22 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 35 },
+          5: { cellWidth: 30 }
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: () => {
+          // Pie de página
+          doc.setFontSize(8)
+          doc.setTextColor(128, 128, 128)
+          doc.text(
+            `Página ${doc.getNumberOfPages()}`,
+            pageWidth / 2,
+            doc.internal.pageSize.getHeight() - 10,
+            { align: 'center' }
+          )
+          doc.setTextColor(0, 0, 0)
+        }
+      })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      yPos = (doc as any).lastAutoTable.finalY + 15
+    })
+
+    // Descargar PDF
+    doc.save(`trabajadores_por_grupo_${new Date().getTime()}.pdf`)
+    notify.success('PDF generado', 'El archivo se descargó correctamente')
+
+  } catch (error) {
+    console.error('Error al generar PDF:', error)
+    notify.error('Error', 'No se pudo generar el PDF')
+  } finally {
+    isExportandoPdfGrupo.value = false
+  }
+}
+
 onMounted(() => {
   cargarTrabajadores()
 })
@@ -607,9 +1101,9 @@ h2 {
 
 .btn-buscar { background-color: #3498db; color: white; }
 .btn-crear { background-color: #27ae60; color: white; }
-.btn-importar { background-color: #9b59b6; color: white; }
+.btn-importar { background-color: var(--color-primary); color: white; }
 
-.btn-buscar, .btn-crear, .btn-importar, .btn-exportar {
+.btn-buscar, .btn-crear, .btn-importar, .btn-exportar, .btn-pdf {
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
@@ -617,9 +1111,17 @@ h2 {
   font-weight: bold;
 }
 
+.btn-pdf { background-color: #9b59b6; color: white; }
+.btn-pdf:hover:not(:disabled) { background-color: #8e44ad; }
+.btn-pdf:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+.btn-pdf-grupo { background-color: #16a085; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.btn-pdf-grupo:hover:not(:disabled) { background-color: #1abc9c; }
+.btn-pdf-grupo:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
 .btn-buscar:hover { background-color: #2980b9; }
 .btn-crear:hover { background-color: #219a52; }
-.btn-importar:hover { background-color: #8e44ad; }
+.btn-importar:hover { background-color: var(--color-primary-dark); }
 
 .btn-exportar { background-color: #e67e22; color: white; }
 .btn-exportar:hover { background-color: #d35400; }
@@ -660,6 +1162,26 @@ h2 {
   accent-color: #3498db;
 }
 
+.finca-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e0f2f1;
+  color: #00796b;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.grupo-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #fff3e0;
+  color: #e65100;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
 .cargo-badge {
   display: inline-block;
   padding: 4px 10px;
@@ -668,6 +1190,23 @@ h2 {
   border-radius: 12px;
   font-size: 0.8em;
   font-weight: 600;
+}
+
+.nombre-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nombre-principal {
+  font-weight: 500;
+  color: #334155;
+}
+
+.cargo-subtexto {
+  font-size: 0.75em;
+  color: #64748b;
+  font-style: italic;
 }
 
 .estado-badge {
@@ -701,8 +1240,10 @@ h2 {
   margin-right: 5px;
 }
 
+.btn-ver { background-color: var(--color-primary); color: white; }
 .btn-editar { background-color: #3498db; color: white; }
 .btn-eliminar { background-color: #e74c3c; color: white; }
+.btn-ver:hover { background-color: var(--color-primary-dark); }
 .btn-editar:hover { background-color: #2980b9; }
 .btn-eliminar:hover { background-color: #c0392b; }
 
@@ -755,6 +1296,185 @@ h2 {
 }
 
 .modal-importar { max-width: 450px; }
+.modal-detalles {
+  max-width: 480px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.detalles-wrapper {
+  padding: 0;
+}
+
+.detalles-header {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  padding: 30px 25px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.avatar {
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2em;
+  font-weight: 700;
+  color: white;
+  border: 3px solid rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.header-info .nombre {
+  margin: 0;
+  color: white;
+  font-size: 1.4em;
+  font-weight: 600;
+}
+
+.header-info .ruc {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9em;
+}
+
+.estado-badge-header {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+  margin-top: 5px;
+}
+
+.estado-badge-header.activo {
+  background: rgba(46, 213, 115, 0.25);
+  color: #7bed9f;
+}
+
+.estado-badge-header.inactivo {
+  background: rgba(255, 107, 107, 0.25);
+  color: #ff6b6b;
+}
+
+.detalles-grid {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.detalle-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.detalle-card:hover {
+  background: #f1f3f4;
+  transform: translateX(5px);
+}
+
+.detalle-icon {
+  font-size: 1.5em;
+  width: 45px;
+  height: 45px;
+  background: white;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.detalle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detalle-info .detalle-label {
+  font-size: 0.75em;
+  color: #95a5a6;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.detalle-info .detalle-value {
+  font-size: 1em;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+.detalle-info .sin-asignar {
+  color: #bdc3c7;
+  font-style: italic;
+}
+
+.detalles-actions {
+  display: flex;
+  gap: 12px;
+  padding: 20px 25px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+}
+
+.btn-action {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-editar-detail {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: white;
+}
+
+.btn-editar-detail:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.4);
+}
+
+.btn-cerrar {
+  background: white;
+  color: #7f8c8d;
+  border: 1px solid #ddd;
+}
+
+.btn-cerrar:hover {
+  background: #f5f5f5;
+  color: #2c3e50;
+}
+
+.btn-icon {
+  font-size: 1em;
+}
 .modal-small { max-width: 350px; text-align: center; }
 .modal-small h3 { margin-top: 0; color: #e74c3c; }
 
@@ -768,8 +1488,18 @@ h2 {
   font-size: 24px;
   cursor: pointer;
   color: #999;
+  z-index: 10;
 }
 .close:hover { color: #333; }
+
+.modal-detalles .close {
+  color: rgba(255, 255, 255, 0.8);
+  top: 15px;
+  right: 20px;
+}
+.modal-detalles .close:hover {
+  color: white;
+}
 
 .import-container { margin: 20px 0; }
 
@@ -783,8 +1513,8 @@ h2 {
 }
 
 .file-drop-zone:hover, .file-drop-zone.drag-over {
-  border-color: #9b59b6;
-  background-color: #f3e5f5;
+  border-color: var(--color-primary);
+  background-color: #e3f2fd;
 }
 
 .drop-icon { font-size: 2.5em; margin-bottom: 10px; }
@@ -792,14 +1522,14 @@ h2 {
 
 .btn-seleccionar {
   display: inline-block;
-  background-color: #9b59b6;
+  background-color: var(--color-primary);
   color: white;
   padding: 8px 20px;
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
 }
-.btn-seleccionar:hover { background-color: #8e44ad; }
+.btn-seleccionar:hover { background-color: var(--color-primary-dark); }
 
 .file-info {
   display: flex;
@@ -849,6 +1579,146 @@ h2 {
 }
 .instrucciones p { margin: 5px 0; }
 
+/* Modal Advertencias */
+.modal-advertencias {
+  max-width: 520px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.advertencias-header {
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  padding: 25px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.warning-icon {
+  font-size: 2.5em;
+}
+
+.advertencias-header h3 {
+  margin: 0;
+  color: white;
+  font-size: 1.4em;
+}
+
+.advertencias-content {
+  padding: 25px;
+}
+
+.trabajador-nombre {
+  font-size: 1.1em;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.ruc-info {
+  color: #7f8c8d;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.advertencias-titulo {
+  color: #e74c3c;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.advertencias-lista ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.advertencia-item {
+  background: #fff3cd;
+  border-left: 4px solid #f39c12;
+  padding: 12px 15px;
+  margin-bottom: 10px;
+  border-radius: 0 8px 8px 0;
+  color: #856404;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+
+.sin-advertencias {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #d4edda;
+  padding: 15px 20px;
+  border-radius: 8px;
+  color: #155724;
+}
+
+.check-icon {
+  font-size: 1.5em;
+}
+
+.sin-advertencias p {
+  margin: 0;
+}
+
+.confirmacion-texto {
+  margin-top: 20px;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: center;
+}
+
+.advertencias-actions {
+  display: flex;
+  gap: 12px;
+  padding: 20px 25px;
+  background: #f8f9fa;
+  border-top: 1px solid #eee;
+}
+
+.btn-cancelar-adv, .btn-confirmar-adv {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95em;
+  transition: all 0.2s ease;
+}
+
+.btn-cancelar-adv {
+  background: white;
+  color: #7f8c8d;
+  border: 1px solid #ddd;
+}
+
+.btn-cancelar-adv:hover {
+  background: #f5f5f5;
+  color: #2c3e50;
+}
+
+.btn-confirmar-adv {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+}
+
+.btn-confirmar-adv:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+}
+
+.modal-advertencias .close {
+  color: rgba(255, 255, 255, 0.8);
+  top: 15px;
+  right: 20px;
+}
+
+.modal-advertencias .close:hover {
+  color: white;
+}
+
 @media (max-width: 768px) {
   .trabajador-list { padding: 10px; }
 
@@ -884,6 +1754,10 @@ h2 {
 
   .pct-label {
     font-size: 0.95em;
+  }
+
+  .modal-advertencias {
+    width: 95%;
   }
 }
 </style>

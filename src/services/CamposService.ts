@@ -1,5 +1,5 @@
 import axios, { AxiosResponse } from 'axios'
-import type { Campos, CamposRequest } from '@/types/Campos'
+import type { Campos, CamposRequest, CalcularDepreciacionRequest, CalcularDepreciacionResponse } from '@/types/Campos'
 import type { PagedResponse, SearchFilter } from '@/types/EstadoCuenta'
 
 const API_BASE_URL = '/api/campos'
@@ -36,8 +36,8 @@ class CamposService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || 'createdAt',
-      sortType: filtros.sortType || 'DES'
+      sortBy: filtros.sortBy || 'campo',
+      sortType: filtros.sortType || 'ASC'
     }
 
     return axios.post(`${API_BASE_URL}/search`, requestBody, {
@@ -45,6 +45,10 @@ class CamposService {
         'Content-Type': 'application/json'
       }
     })
+  }
+
+  calcularDepreciacion(request: CalcularDepreciacionRequest): Promise<AxiosResponse<CalcularDepreciacionResponse>> {
+    return axios.post(`${API_BASE_URL}/depreciar`, request)
   }
 }
 

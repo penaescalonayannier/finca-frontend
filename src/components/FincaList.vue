@@ -466,7 +466,7 @@ h2 {
 
 .btn-buscar { background-color: #27ae60; color: white; }
 .btn-crear { background-color: #2ecc71; color: white; }
-.btn-importar { background-color: #9b59b6; color: white; }
+.btn-importar { background-color: var(--color-primary); color: white; }
 
 .btn-buscar, .btn-crear, .btn-importar, .btn-exportar {
   padding: 10px 20px;
@@ -488,10 +488,10 @@ h2 {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
 }
-.btn-importar:hover { 
-  background-color: #8e44ad; 
+.btn-importar:hover {
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
 
 .btn-exportar { 
@@ -570,23 +570,23 @@ h2 {
 }
 
 .btn-ver {
-  background-color: #1abc9c;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-ver:hover {
-  background-color: #16a085;
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 188, 156, 0.3);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
 
 .btn-editar {
-  background-color: #3498db;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-editar:hover {
-  background-color: #2980b9;
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
@@ -767,8 +767,8 @@ h2 {
 }
 
 .file-drop-zone:hover, .file-drop-zone.drag-over {
-  border-color: #9b59b6;
-  background-color: #f3e5f5;
+  border-color: var(--color-primary);
+  background-color: #e3f2fd;
 }
 
 .drop-icon { font-size: 2.5em; margin-bottom: 10px; }
@@ -776,7 +776,7 @@ h2 {
 
 .btn-seleccionar {
   display: inline-block;
-  background-color: #9b59b6;
+  background-color: var(--color-primary);
   color: white;
   padding: 8px 20px;
   border-radius: 6px;
@@ -785,8 +785,8 @@ h2 {
   transition: all 0.3s ease;
 }
 
-.btn-seleccionar:hover { 
-  background-color: #8e44ad;
+.btn-seleccionar:hover {
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
 }
 

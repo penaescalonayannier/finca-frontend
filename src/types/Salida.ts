@@ -24,7 +24,7 @@ export interface Salida {
 export interface ItemSalida {
   id?: string
   salidaId?: string
-  trabajadorId: string
+  trabajadorId?: string // Optional for COMEDOR salidas
   trabajadorNombre?: string
   cantidad: number
   precio?: number
@@ -34,6 +34,7 @@ export interface ItemSalida {
 export interface CreateSalidaRequest {
   destino: DestinoSalida
   fincaProductoId: string
+  almacenFincaProductoId?: string // Optional: when creating from almacen view
   observaciones?: string
   items: ItemSalida[]
 }

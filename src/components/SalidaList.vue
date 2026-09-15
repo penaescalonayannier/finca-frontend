@@ -23,6 +23,7 @@
 
       <div class="button-group">
         <button @click="buscarConReset" class="btn-buscar">Buscar</button>
+        <button @click="abrirModalConsolidado" class="btn-consolidado">PDF vales consolidados</button>
         <button @click="mostrarModalCrear = true" class="btn-crear">+ Nueva Salida</button>
       </div>
     </div>
@@ -99,6 +100,37 @@
         <button class="btn-pag" :disabled="paginaActual >= totalPaginas - 1" @click="cambiarPagina(paginaActual + 1)">
           Siguiente
         </button>
+      </div>
+    </div>
+
+    <!-- PDF consolidado: solo lectura, no afecta stock ni contabilidad -->
+    <div v-if="mostrarModalConsolidado" class="modal" @click.self="cerrarModalConsolidado">
+      <div class="modal-content modal-consolidado">
+        <span class="close" @click="cerrarModalConsolidado">&times;</span>
+        <h3>Vale consolidado por destino</h3>
+        <p class="consolidado-info">
+          Genera un único PDF con los vales activos del día y destino seleccionados. Incluye el resumen por producto y el detalle de entrega por trabajador. No modifica inventario ni contabilidad.
+        </p>
+
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input v-model="formConsolidado.fecha" type="date" class="form-input" :disabled="generandoConsolidado" />
+        </div>
+        <div class="form-group">
+          <label>Destino *</label>
+          <select v-model="formConsolidado.destino" class="form-select" :disabled="generandoConsolidado">
+            <option value="TRABAJADORES">Trabajadores</option>
+            <option value="COMEDOR">Comedor</option>
+            <option value="INSUMO">Insumo</option>
+            <option value="OTROS">Otros</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button class="btn-cancelar" @click="cerrarModalConsolidado" :disabled="generandoConsolidado">Cancelar</button>
+          <button class="btn-guardar" @click="generarPdfConsolidado" :disabled="!formConsolidado.fecha || generandoConsolidado">
+            {{ generandoConsolidado ? 'Generando...' : 'Descargar PDF' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -213,6 +245,12 @@ const filtroTipo = ref('')
 // Modales
 const mostrarModalDetalles = ref(false)
 const mostrarModalCrear = ref(false)
+const mostrarModalConsolidado = ref(false)
+const generandoConsolidado = ref(false)
+const formConsolidado = ref({
+  fecha: new Date().toISOString().slice(0, 10),
+  destino: 'TRABAJADORES'
+})
 
 const salidaSeleccionada = ref<Salida | null>(null)
 
@@ -260,6 +298,43 @@ const cambiarPagina = (nuevaPagina: number) => {
 const cambiarTamanoPagina = () => {
   paginaActual.value = 0
   cargarSalidas()
+}
+
+const abrirModalConsolidado = () => {
+  formConsolidado.value = {
+    fecha: new Date().toISOString().slice(0, 10),
+    destino: 'TRABAJADORES'
+  }
+  mostrarModalConsolidado.value = true
+}
+
+const cerrarModalConsolidado = () => {
+  if (generandoConsolidado.value) return
+  mostrarModalConsolidado.value = false
+}
+
+const generarPdfConsolidado = async () => {
+  if (!formConsolidado.value.fecha) return
+  generandoConsolidado.value = true
+  try {
+    await SalidaService.descargarValesConsolidados(
+      formConsolidado.value.fecha,
+      formConsolidado.value.destino
+    )
+    notify.success('PDF generado', 'Se descargó el vale consolidado sin modificar registros contables ni de inventario')
+    generandoConsolidado.value = false
+    cerrarModalConsolidado()
+  } catch (error: unknown) {
+    console.error('Error al generar vale consolidado:', error)
+    const status = (error as { response?: { status?: number } })?.response?.status
+    if (status === 404) {
+      notify.warning('Sin vales', 'No existen vales activos para la fecha y el destino seleccionados')
+    } else {
+      notify.error('Error', 'No se pudo generar el PDF consolidado')
+    }
+  } finally {
+    generandoConsolidado.value = false
+  }
 }
 
 // Ver detalles
@@ -409,7 +484,7 @@ h2 {
 }
 
 .btn-buscar {
-  background-color: #3498db;
+  background-color: var(--color-primary);
   color: white;
   padding: 10px 20px;
   border: none;
@@ -420,6 +495,16 @@ h2 {
 
 .btn-crear {
   background-color: #27ae60;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-consolidado {
+  background-color: #8e44ad;
   color: white;
   padding: 10px 20px;
   border: none;
@@ -507,12 +592,12 @@ h2 {
 }
 
 .btn-ver {
-  background-color: #3498db;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-descargar {
-  background-color: #9b59b6;
+  background-color: var(--color-primary);
   color: white;
 }
 
@@ -585,6 +670,20 @@ h2 {
 
 .modal-grande {
   max-width: 700px;
+}
+
+.modal-consolidado {
+  max-width: 520px;
+}
+
+.consolidado-info {
+  margin: 0 0 20px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f3e8f8;
+  color: #5b2c6f;
+  line-height: 1.45;
+  font-size: 0.9em;
 }
 
 .modal-small {

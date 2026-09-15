@@ -59,6 +59,9 @@
           <button @click="definirSabados" class="btn-accion btn-definir-sabados" :disabled="!tieneSabados || guardando">
             {{ guardando ? 'Aplicando...' : 'Sábados 4h' }}
           </button>
+          <button @click="definirDomingos" class="btn-accion btn-definir-domingos" :disabled="!tieneDomingos || guardando">
+            {{ guardando ? 'Aplicando...' : 'Domingos 4h' }}
+          </button>
         </div>
       </div>
 
@@ -77,7 +80,7 @@
                 v-for="dia in diasOrdenados"
                 :key="dia.id"
                 class="col-dia"
-                :class="{ 'col-sabado': esSabado(dia.fecha) }"
+                :class="{ 'col-sabado': esSabado(dia.fecha), 'col-domingo': esDomingo(dia.fecha) }"
                 :title="formatDateFull(dia.fecha)"
               >
                 <div class="dia-header">
@@ -112,7 +115,8 @@
                 class="col-dia celda-datos"
                 :class="{
                   'celda-guardando': celdaGuardando === `${trabajador.id}-${dia.id}`,
-                  'col-sabado': esSabado(dia.fecha)
+                  'col-sabado': esSabado(dia.fecha),
+                  'col-domingo': esDomingo(dia.fecha)
                 }"
               >
                 <!-- Con datos -->
@@ -190,7 +194,7 @@
                 v-for="dia in diasOrdenados"
                 :key="dia.id"
                 class="col-dia celda-total-dia"
-                :class="{ 'col-sabado': esSabado(dia.fecha) }"
+                :class="{ 'col-sabado': esSabado(dia.fecha), 'col-domingo': esDomingo(dia.fecha) }"
               >
                 {{ getTotalDia(dia) }}
               </td>
@@ -242,6 +246,10 @@
           <div class="seleccion-acciones">
             <button @click="seleccionarTodosDias" class="btn-seleccionar-todos">Seleccionar todos</button>
             <button @click="diasSeleccionados = []" class="btn-desmarcar-todos">Desmarcar todos</button>
+            <label class="checkbox-horas-extras">
+              <input type="checkbox" v-model="incluirDomingos" />
+              <span>Horas Extras (domingos)</span>
+            </label>
             <span class="dias-contador">{{ diasSeleccionados.length }} día(s) seleccionado(s)</span>
           </div>
           <div class="dias-grid">
@@ -253,13 +261,15 @@
                 seleccionado: diasSeleccionados.includes(diaNum.fecha),
                 existente: diaNum.existe,
                 domingo: diaNum.esDomingo,
-                disabled: diaNum.existe || diaNum.esDomingo
+                'domingo-habilitado': diaNum.esDomingo && incluirDomingos && !diaNum.existe,
+                disabled: diaNum.existe || (diaNum.esDomingo && !incluirDomingos)
               }"
-              @click="!diaNum.existe && !diaNum.esDomingo && toggleDiaSeleccionado(diaNum.fecha)"
+              @click="!diaNum.existe && (!diaNum.esDomingo || incluirDomingos) && toggleDiaSeleccionado(diaNum.fecha)"
             >
               <span class="dia-num">{{ diaNum.numero }}</span>
               <span class="dia-nombre-corto">{{ diaNum.nombreCorto }}</span>
               <span v-if="diaNum.existe" class="dia-existe-badge">Ya existe</span>
+              <span v-else-if="diaNum.esDomingo && incluirDomingos" class="dia-extra-badge">Extra</span>
             </div>
           </div>
         </div>
@@ -387,6 +397,7 @@ const inputEdicion = ref<HTMLInputElement[]>([])
 const mostrarModalDia = ref(false)
 const diasSeleccionados = ref<string[]>([])
 const guardandoDia = ref(false)
+const incluirDomingos = ref(false)
 
 // Modal Agregar Trabajadores
 const mostrarModalTrabajador = ref(false)
@@ -443,10 +454,10 @@ const toggleDiaSeleccionado = (fecha: string) => {
   }
 }
 
-// Seleccionar todos los días disponibles (no existentes, no domingos)
+// Seleccionar todos los días disponibles (no existentes, domingos solo si incluirDomingos)
 const seleccionarTodosDias = () => {
   const disponibles = diasDelMes.value
-    .filter(d => !d.existe && !d.esDomingo)
+    .filter(d => !d.existe && (!d.esDomingo || incluirDomingos.value))
     .map(d => d.fecha)
   diasSeleccionados.value = disponibles
 }
@@ -491,6 +502,14 @@ const tieneSabados = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
     return d.getDay() === 6 && dia.trabajadores && dia.trabajadores.length > 0
+  })
+})
+
+// Verificar si hay domingos con trabajadores en el reporte
+const tieneDomingos = computed(() => {
+  return dias.value.some(dia => {
+    const d = new Date(dia.fecha + 'T00:00:00')
+    return d.getDay() === 0 && dia.trabajadores && dia.trabajadores.length > 0
   })
 })
 
@@ -569,6 +588,11 @@ const formatDateFull = (fecha: string): string => {
 const esSabado = (fecha: string): boolean => {
   const d = new Date(fecha + 'T00:00:00')
   return d.getDay() === 6
+}
+
+const esDomingo = (fecha: string): boolean => {
+  const d = new Date(fecha + 'T00:00:00')
+  return d.getDay() === 0
 }
 
 // ==================== EDICIÓN DE CELDAS ====================
@@ -708,6 +732,7 @@ const abrirModalAgregarDia = () => {
 const cerrarModalDia = () => {
   mostrarModalDia.value = false
   diasSeleccionados.value = []
+  incluirDomingos.value = false
 }
 
 const agregarDias = async () => {
@@ -966,6 +991,58 @@ const definirSabados = async () => {
   } catch (error: any) {
     console.error('Error al definir sábados:', error)
     alert(error.response?.data?.message || 'Error al definir sábados')
+  } finally {
+    guardando.value = false
+  }
+}
+
+const definirDomingos = async () => {
+  // Obtener días que son domingo
+  const domingos = dias.value.filter(dia => {
+    const d = new Date(dia.fecha + 'T00:00:00')
+    return d.getDay() === 0
+  })
+
+  if (domingos.length === 0) {
+    alert('No hay domingos en el reporte')
+    return
+  }
+
+  // Contar trabajadores a actualizar
+  let totalTrabajadores = 0
+  domingos.forEach(dia => {
+    totalTrabajadores += dia.trabajadores?.length || 0
+  })
+
+  if (totalTrabajadores === 0) {
+    alert('No hay trabajadores en los días domingo')
+    return
+  }
+
+  if (!confirm(`¿Definir 4 horas extras y 0 norma para ${totalTrabajadores} registro(s) en ${domingos.length} domingo(s)?`)) {
+    return
+  }
+
+  guardando.value = true
+  try {
+    for (const dia of domingos) {
+      for (const trabajador of (dia.trabajadores || [])) {
+        if (trabajador.id) {
+          await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
+            horas: '4',
+            norma: '0'
+          })
+        }
+      }
+    }
+
+    await cargarDias()
+
+    ultimoGuardado.value = true
+    setTimeout(() => { ultimoGuardado.value = false }, 2000)
+  } catch (error: any) {
+    console.error('Error al definir domingos:', error)
+    alert(error.response?.data?.message || 'Error al definir domingos')
   } finally {
     guardando.value = false
   }
@@ -1339,6 +1416,15 @@ watch(() => props.reporteId, () => cargarReporte())
   background: #f57c00;
 }
 
+.btn-definir-domingos {
+  background: #e65100;
+  color: white;
+}
+
+.btn-definir-domingos:hover:not(:disabled) {
+  background: #bf360c;
+}
+
 .btn-accion:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -1447,6 +1533,40 @@ thead .sticky-col {
 .col-sabado.celda-total-dia {
   background: #fafafa !important;
   color: #000;
+}
+
+/* Estilos para columnas de domingo (horas extras) */
+.col-domingo {
+  background: #fff3e0 !important;
+}
+
+.col-domingo.col-dia {
+  background: linear-gradient(180deg, #ff9800 0%, #e65100 100%) !important;
+}
+
+.col-domingo.col-dia .dia-nombre,
+.col-domingo.col-dia .dia-numero {
+  color: #fff !important;
+}
+
+.col-domingo .celda-horas-parte {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.col-domingo .celda-norma-parte {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.col-domingo .valor-display,
+.col-domingo .valor-display.norma {
+  color: #e65100;
+}
+
+.col-domingo.celda-total-dia {
+  background: #ffe0b2 !important;
+  color: #e65100;
 }
 
 .dia-header {
@@ -1985,6 +2105,27 @@ thead .col-total {
   color: #e74c3c;
 }
 
+.dia-checkbox.domingo-habilitado {
+  background: #fff3e0;
+  border-color: #ffb74d;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.dia-checkbox.domingo-habilitado:hover {
+  border-color: #ff9800;
+  background: #ffe0b2;
+}
+
+.dia-checkbox.domingo-habilitado.seleccionado {
+  border-color: #ff9800;
+  background: #ffe0b2;
+}
+
+.dia-checkbox.domingo-habilitado .dia-num {
+  color: #e65100;
+}
+
 .dia-num {
   font-size: 1.1em;
   font-weight: 700;
@@ -2006,6 +2147,43 @@ thead .col-total {
   color: white;
   padding: 1px 3px;
   border-radius: 3px;
+}
+
+.dia-extra-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.5em;
+  background: #ff9800;
+  color: white;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+.checkbox-horas-extras {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 5px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #e65100;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkbox-horas-extras:hover {
+  background: #ffe0b2;
+}
+
+.checkbox-horas-extras input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #ff9800;
 }
 
 .modal-header {

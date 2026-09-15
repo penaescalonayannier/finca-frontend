@@ -1,34 +1,32 @@
 import axios from 'axios'
 import type { CargoEntity, CreateCargoRequest, UpdateCargoRequest, CargoListResponse } from '@/types/Cargo'
 
-const api = axios.create({
-  baseURL: '/api'
-})
+const API_BASE_URL = '/api/cargo'
 
 const CargoService = {
   // Create
   create(data: CreateCargoRequest) {
-    return api.post<CargoEntity>('/cargo', data)
+    return axios.post<CargoEntity>(API_BASE_URL, data)
   },
 
   // Read
   getById(id: string) {
-    return api.get<CargoEntity>(`/cargo/${id}`)
+    return axios.get<CargoEntity>(`${API_BASE_URL}/${id}`)
   },
 
   // Update
   update(id: string, data: UpdateCargoRequest) {
-    return api.put<CargoEntity>(`/cargo/${id}`, data)
+    return axios.put<CargoEntity>(`${API_BASE_URL}/${id}`, data)
   },
 
   // Delete
   delete(id: string) {
-    return api.delete(`/cargo/${id}`)
+    return axios.delete(`${API_BASE_URL}/${id}`)
   },
 
   // Search with pagination
   search(page = 0, size = 10, sortBy = 'name', sortType: 'ASC' | 'DES' = 'ASC') {
-    return api.post<CargoListResponse>('/cargo/search', {
+    return axios.post<CargoListResponse>(`${API_BASE_URL}/search`, {
       pageSize: size,
       page: page,
       sortBy: sortBy,
@@ -39,7 +37,7 @@ const CargoService = {
 
   // Get all cargos (simple list without pagination)
   getAll() {
-    return api.post<CargoListResponse>('/cargo/search', {
+    return axios.post<CargoListResponse>(`${API_BASE_URL}/search`, {
       pageSize: 1000,
       page: 0,
       sortBy: 'name',

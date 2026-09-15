@@ -36,7 +36,7 @@ class DeudaTrabajadorService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || 'createdAt',
+      sortBy: filtros.sortBy || 'importe',
       sortType: filtros.sortType || 'DES'
     }
 
@@ -48,7 +48,7 @@ class DeudaTrabajadorService {
   }
 
   obtenerDetalles(trabajadorId: string): Promise<AxiosResponse<DeudaTrabajadorDetalle[]>> {
-    return axios.get(`${API_BASE_URL}/detalles/${trabajadorId}`)
+    return axios.get(`${API_BASE_URL}/${trabajadorId}/detalle`)
   }
 
   registrarPago(pago: RegistrarPagoRequest): Promise<AxiosResponse<{ id: string; message: string }>> {

@@ -105,6 +105,97 @@
         </div>
       </div>
 
+      <h4 class="section-title">Datos Financieros</h4>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="valorAdquisicion">Valor Adquisición</label>
+          <input
+            id="valorAdquisicion"
+            v-model.number="form.valorAdquisicion"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="valorResidual">Valor Residual</label>
+          <input
+            id="valorResidual"
+            v-model.number="form.valorResidual"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="depreciacionAcumulada">Depreciación Acumulada</label>
+          <input
+            id="depreciacionAcumulada"
+            v-model.number="form.depreciacionAcumulada"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="0.00"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="anosCepa">Años Cepa</label>
+          <input
+            id="anosCepa"
+            v-model.number="form.anosCepa"
+            type="number"
+            min="0"
+            placeholder="0"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tasaDepreciacionAnual">Tasa Depreciación Anual (%)</label>
+          <input
+            id="tasaDepreciacionAnual"
+            v-model.number="form.tasaDepreciacionAnual"
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            placeholder="Ej: 5.00"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="vidaUtilAnios">Vida Útil (años)</label>
+          <input
+            id="vidaUtilAnios"
+            v-model.number="form.vidaUtilAnios"
+            type="number"
+            min="1"
+            placeholder="Ej: 20"
+          />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="fechaInicioDepreciacion">Fecha Inicio Depreciación</label>
+          <input
+            id="fechaInicioDepreciacion"
+            v-model="form.fechaInicioDepreciacion"
+            type="date"
+          />
+        </div>
+        <div class="form-group"></div>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn-guardar" :disabled="isGuardando">
           {{ isGuardando ? 'Guardando...' : (isEditing ? 'Actualizar' : 'Crear') }}
@@ -141,20 +232,55 @@ const form = ref<CamposRequest>({
   cepa: '',
   poblacion: 0,
   destino: '',
-  rendimiento: 0
+  rendimiento: 0,
+  valorAdquisicion: undefined,
+  depreciacionAcumulada: undefined,
+  valorResidual: undefined,
+  anosCepa: undefined,
+  tasaDepreciacionAnual: undefined,
+  vidaUtilAnios: undefined,
+  fechaInicioDepreciacion: undefined
 })
+
+const getBloqueId = (campo: Campos): string => {
+  if (campo.bloque && typeof campo.bloque === 'object') {
+    return campo.bloque.id || ''
+  }
+  return (campo.bloque as unknown as string) || ''
+}
+
+const getVariedadId = (campo: Campos): string => {
+  if (campo.variedad && typeof campo.variedad === 'object') {
+    return campo.variedad.id || ''
+  }
+  return (campo.variedad as unknown as string) || ''
+}
+
+const getCepaId = (campo: Campos): string => {
+  if (campo.cepa && typeof campo.cepa === 'object') {
+    return campo.cepa.id || ''
+  }
+  return (campo.cepa as unknown as string) || ''
+}
 
 const cargarDatos = () => {
   if (props.campos) {
     form.value = {
-      bloque: props.campos.bloque || '',
+      bloque: getBloqueId(props.campos),
       campo: props.campos.campo || '',
       area: props.campos.area || 0,
-      variedad: props.campos.variedad || '',
-      cepa: props.campos.cepa || '',
+      variedad: getVariedadId(props.campos),
+      cepa: getCepaId(props.campos),
       poblacion: props.campos.poblacion || 0,
       destino: props.campos.destino || '',
-      rendimiento: props.campos.rendimiento || 0
+      rendimiento: props.campos.rendimiento || 0,
+      valorAdquisicion: props.campos.valorAdquisicion,
+      depreciacionAcumulada: props.campos.depreciacionAcumulada,
+      valorResidual: props.campos.valorResidual,
+      anosCepa: props.campos.anosCepa,
+      tasaDepreciacionAnual: props.campos.tasaDepreciacionAnual,
+      vidaUtilAnios: props.campos.vidaUtilAnios,
+      fechaInicioDepreciacion: props.campos.fechaInicioDepreciacion
     }
   }
 }
@@ -275,5 +401,13 @@ h3 {
 
 .btn-cancelar:hover {
   background-color: #7f8c8d;
+}
+
+.section-title {
+  margin: 20px 0 15px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #3498db;
+  color: #2c3e50;
+  font-size: 1em;
 }
 </style>

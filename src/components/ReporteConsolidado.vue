@@ -55,9 +55,25 @@
           @click="verTrabajadoresMenor8Horas"
           class="btn-menor8"
           :disabled="isLoading || !reporteData"
-          title="Ver trabajadores con menos de 8 horas en algún día"
+          title="Ver trabajadores con menos de 8 horas (lunes a viernes)"
         >
           ⏱️ Menos de 8h
+        </button>
+        <button
+          @click="verTrabajadoresSinTrabajar"
+          class="btn-sin-trabajar"
+          :disabled="isLoading || !reporteData"
+          title="Ver trabajadores sin horas en días laborables (lunes a viernes)"
+        >
+          🚫 Sin Trabajar
+        </button>
+        <button
+          @click="verPropuestosDeficiente"
+          class="btn-deficiente"
+          :disabled="isLoading || !reporteData"
+          title="Propuestos a Deficiente por ausentismo o incumplimiento de jornada"
+        >
+          ⚠️ Propuestos Deficiente
         </button>
         <button
           @click="cargarHorasPrenomina"
@@ -173,7 +189,7 @@
           <tbody>
             <tr v-for="(trabajador, index) in reporteData.trabajadores" :key="trabajador.trabajadorId">
               <td class="row-number">{{ index + 1 }}</td>
-              <td class="nombre-col">
+              <td class="nombre-col clickable" @click="verReportesTrabajador(trabajador)" title="Ver reportes del trabajador">
                 <strong>{{ trabajador.nombre }}</strong>
                 <span class="subtext">{{ trabajador.cargo || 'Sin cargo' }}</span>
               </td>
@@ -356,7 +372,7 @@
         <div class="modal-body">
           <div v-if="trabajadoresMenor8.length > 0" class="menor8-container">
             <div class="info-message">
-              Se encontraron <strong>{{ trabajadoresMenor8.length }}</strong> trabajador(es) con días trabajados menores a 8 horas.
+              Se encontraron <strong>{{ trabajadoresMenor8.length }}</strong> trabajador(es) con días laborables (L-V) menores a 8 horas.
             </div>
 
             <div v-for="trabajador in trabajadoresMenor8" :key="trabajador.trabajadorId" class="trabajador-menor8">
@@ -389,12 +405,149 @@
 
           <div v-else class="no-menor8">
             <span class="success-icon">✓</span>
-            <p>No hay trabajadores con menos de 8 horas en este período. Todos trabajan 8 horas o más.</p>
+            <p>No hay trabajadores con menos de 8 horas en días laborables (L-V). Todos cumplen las 8 horas.</p>
           </div>
         </div>
 
         <div class="modal-footer">
           <button @click="cerrarModalMenor8" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Trabajadores Sin Trabajar -->
+    <div v-if="mostrarModalSinTrabajar" class="modal-overlay">
+      <div class="modal-sin-trabajar">
+        <div class="modal-header">
+          <h3>🚫 Trabajadores Sin Trabajar</h3>
+          <button @click="cerrarModalSinTrabajar" class="btn-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="trabajadoresSinTrabajar.length > 0" class="sin-trabajar-container">
+            <div class="info-message warning">
+              Se encontraron <strong>{{ trabajadoresSinTrabajar.length }}</strong> trabajador(es) con días laborables (L-V) sin horas reportadas.
+            </div>
+
+            <div v-for="trabajador in trabajadoresSinTrabajar" :key="trabajador.trabajadorId" class="trabajador-sin-trabajar">
+              <div class="trabajador-header">
+                <div class="trabajador-info">
+                  <h4>{{ trabajador.nombre }}</h4>
+                  <p class="subinfo">Cargo: {{ trabajador.cargo || 'Sin cargo' }}</p>
+                </div>
+                <span class="dias-badge ausente">{{ trabajador.diasSinTrabajar.length }} día(s)</span>
+              </div>
+
+              <table class="horas-table">
+                <thead>
+                  <tr>
+                    <th>Día</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(dia, index) in trabajador.diasSinTrabajar" :key="index">
+                    <td class="dia-col">{{ dia.dia }}</td>
+                    <td class="estado-col ausente">Sin horas reportadas</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div v-else class="no-sin-trabajar">
+            <span class="success-icon">✓</span>
+            <p>Todos los trabajadores tienen horas reportadas en días laborables (L-V).</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="cerrarModalSinTrabajar" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Propuestos a Deficiente -->
+    <div v-if="mostrarModalDeficiente" class="modal-overlay">
+      <div class="modal-deficiente">
+        <div class="modal-header deficiente-header">
+          <h3>⚠️ Propuestos a Deficiente</h3>
+          <button @click="cerrarModalDeficiente" class="btn-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="propuestosDeficiente.length > 0" class="deficiente-container">
+            <div class="info-message critical">
+              Se proponen <strong>{{ propuestosDeficiente.length }}</strong> trabajador(es) como <strong>Deficiente</strong>
+              por ausentismo o incumplimiento de jornada laboral.
+              <br><small>Días laborables del mes: {{ totalDiasLaborables }} (L-V)</small>
+            </div>
+
+            <div class="criterios-box">
+              <h4>📋 Criterios de evaluación:</h4>
+              <ul>
+                <li><span class="criterio ausencia">≥20% días ausente</span> = Alto ausentismo</li>
+                <li><span class="criterio menor8">≥20% días &lt;8h</span> = Incumplimiento de jornada</li>
+                <li><span class="criterio combinado">≥30% combinado</span> = Problemas combinados</li>
+              </ul>
+            </div>
+
+            <div v-for="trabajador in propuestosDeficiente" :key="trabajador.trabajadorId" class="trabajador-deficiente">
+              <div class="trabajador-header-def">
+                <div class="trabajador-info">
+                  <h4>{{ trabajador.nombre }}</h4>
+                  <p class="subinfo">Cargo: {{ trabajador.cargo || 'Sin cargo' }}</p>
+                </div>
+                <span class="motivo-badge">{{ trabajador.motivo }}</span>
+              </div>
+
+              <div class="metricas-grid">
+                <div class="metrica ausencias">
+                  <div class="metrica-valor">{{ trabajador.diasAusente }}</div>
+                  <div class="metrica-label">Días ausente</div>
+                  <div class="metrica-porcentaje">{{ trabajador.porcentajeAusencias }}%</div>
+                </div>
+                <div class="metrica menor8h">
+                  <div class="metrica-valor">{{ trabajador.diasMenor8 }}</div>
+                  <div class="metrica-label">Días &lt;8h</div>
+                  <div class="metrica-porcentaje">{{ trabajador.porcentajeMenor8 }}%</div>
+                </div>
+                <div class="metrica total">
+                  <div class="metrica-valor">{{ trabajador.diasAusente + trabajador.diasMenor8 }}</div>
+                  <div class="metrica-label">Total problemas</div>
+                  <div class="metrica-porcentaje">{{ trabajador.porcentajeTotal }}%</div>
+                </div>
+              </div>
+
+              <div v-if="trabajador.detalleAusencias.length > 0" class="detalle-section">
+                <h5>🚫 Días sin trabajar ({{ trabajador.detalleAusencias.length }}):</h5>
+                <div class="dias-chips">
+                  <span v-for="(d, i) in trabajador.detalleAusencias" :key="'aus-'+i" class="dia-chip ausente">
+                    {{ d.dia }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="trabajador.detalleMenor8.length > 0" class="detalle-section">
+                <h5>⏱️ Días con menos de 8h ({{ trabajador.detalleMenor8.length }}):</h5>
+                <div class="dias-chips">
+                  <span v-for="(d, i) in trabajador.detalleMenor8" :key="'m8-'+i" class="dia-chip menor8">
+                    {{ d.dia }} ({{ d.horas }}h)
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="no-deficiente">
+            <span class="success-icon">✓</span>
+            <p>¡Excelente! No hay trabajadores propuestos a Deficiente este mes.</p>
+            <p class="subtext">Todos cumplen con los estándares de asistencia y jornada laboral.</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="cerrarModalDeficiente" class="btn-cerrar">Cerrar</button>
         </div>
       </div>
     </div>
@@ -477,13 +630,94 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal Reportes por Trabajador -->
+    <div v-if="mostrarModalReportesTrabajador" class="modal-overlay">
+      <div class="modal-reportes-trabajador">
+        <div class="modal-header">
+          <h3>📋 Reportes del Trabajador</h3>
+          <button @click="cerrarModalReportesTrabajador" class="btn-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="trabajadorSeleccionado" class="trabajador-info-header">
+            <strong>{{ trabajadorSeleccionado.nombre }}</strong>
+            <span class="subinfo">{{ trabajadorSeleccionado.cargo || 'Sin cargo' }} | RUC: {{ trabajadorSeleccionado.ruc || '-' }}</span>
+            <span class="periodo-badge">{{ mesSeleccionado }} {{ yearSeleccionado }}</span>
+          </div>
+
+          <div v-if="isLoadingReportesTrabajador" class="loading-modal">
+            <div class="spinner-small"></div>
+            <p>Cargando reportes...</p>
+          </div>
+
+          <div v-else-if="reportesTrabajador.length > 0" class="reportes-trabajador-container">
+            <div class="info-message">
+              El trabajador participó en <strong>{{ reportesTrabajador.length }}</strong> reporte(s) durante {{ mesSeleccionado }} {{ yearSeleccionado }}.
+            </div>
+
+            <table class="reportes-trabajador-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Código</th>
+                  <th>Fecha</th>
+                  <th>Bloque</th>
+                  <th>Campo</th>
+                  <th>Área</th>
+                  <th>Responsable</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(reporte, index) in reportesTrabajador"
+                  :key="reporte.id"
+                  class="fila-clickable"
+                  @click="abrirDetalleExcel(reporte)"
+                  title="Click para editar este reporte"
+                >
+                  <td class="numero">{{ index + 1 }}</td>
+                  <td class="codigo">{{ reporte.codigo }}</td>
+                  <td class="fecha">{{ reporte.fecha }}</td>
+                  <td class="bloque">{{ reporte.bloque }}</td>
+                  <td class="campo">{{ reporte.campo }}</td>
+                  <td class="area">{{ reporte.area }}</td>
+                  <td class="responsable">{{ reporte.trabajadorResponsableNombre || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-else class="no-reportes">
+            <span class="empty-icon">📋</span>
+            <p>Este trabajador no participó en ningún reporte durante {{ mesSeleccionado }} {{ yearSeleccionado }}.</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="cerrarModalReportesTrabajador" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Detalle Excel (edición de reporte) -->
+    <div v-if="mostrarModalDetalleExcel" class="modal-overlay modal-excel-overlay">
+      <div class="modal-excel-container">
+        <DetalleReporteExcel
+          :reporte-id="reporteDetalleId!"
+          @close="cerrarModalDetalleExcel"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { confirmDialog } from '@/composables/useConfirmDialog'
 import ReporteConsolidadoService from '@/services/ReporteConsolidadoService'
 import TrabajadoresExcedidosService from '@/services/TrabajadoresExcedidosService'
+import DetalleReporteExcel from './DetalleReporteExcel.vue'
 import type { ReporteConsolidado } from '@/types/ReporteConsolidado'
 import type { TrabajadorExcedido } from '@/services/TrabajadoresExcedidosService'
 
@@ -506,11 +740,30 @@ const trabajadoresFaltantes = ref<any[]>([])
 const mostrarModalMenor8 = ref(false)
 const trabajadoresMenor8 = ref<any[]>([])
 
+// Modal de trabajadores sin trabajar (0 horas en días laborables)
+const mostrarModalSinTrabajar = ref(false)
+const trabajadoresSinTrabajar = ref<any[]>([])
+
+// Modal de propuestos a Deficiente
+const mostrarModalDeficiente = ref(false)
+const propuestosDeficiente = ref<any[]>([])
+const totalDiasLaborables = ref(0)
+
 // Modal de prenómina
 const mostrarModalPrenomina = ref(false)
 const isLoadingPrenomina = ref(false)
 const horasPrenomina = ref<Record<string, number>>({})
 const comparacionPrenomina = ref<any[]>([])
+
+// Modal de reportes por trabajador
+const mostrarModalReportesTrabajador = ref(false)
+const isLoadingReportesTrabajador = ref(false)
+const reportesTrabajador = ref<any[]>([])
+const trabajadorSeleccionado = ref<any>(null)
+
+// Modal de detalle Excel (edición de reporte)
+const mostrarModalDetalleExcel = ref(false)
+const reporteDetalleId = ref<string | null>(null)
 
 // Filtros
 const yearSeleccionado = ref(new Date().getFullYear().toString())
@@ -672,16 +925,11 @@ const verTrabajadoresFaltantes = async () => {
   mostrarModalFaltantes.value = true
 
   try {
-    const response = await fetch(
-      `/api/reporte/consolidado/trabajadores-faltantes?year=${yearSeleccionado.value}&mes=${mesSeleccionado.value}`
+    const response = await ReporteConsolidadoService.obtenerTrabajadoresFaltantes(
+      yearSeleccionado.value,
+      mesSeleccionado.value
     )
-
-    if (!response.ok) {
-      throw new Error('Error al obtener trabajadores faltantes')
-    }
-
-    const data = await response.json()
-    trabajadoresFaltantes.value = data.items || []
+    trabajadoresFaltantes.value = response.data.items || []
     console.log('Trabajadores faltantes:', trabajadoresFaltantes.value)
   } catch (error) {
     console.error('Error al obtener trabajadores faltantes:', error)
@@ -696,7 +944,7 @@ const cerrarModalFaltantes = () => {
   trabajadoresFaltantes.value = []
 }
 
-// Trabajadores con menos de 8 horas
+// Trabajadores con menos de 8 horas (solo días de lunes a viernes)
 const verTrabajadoresMenor8Horas = () => {
   if (!reporteData.value || !reporteData.value.trabajadores) return
 
@@ -706,10 +954,14 @@ const verTrabajadoresMenor8Horas = () => {
     const diasMenor8: any[] = []
 
     Object.entries(trabajador.horasPorDia).forEach(([dia, horas]) => {
+      const diaNum = parseInt(dia, 10)
+      // Solo considerar días de lunes a viernes (excluir sábados y domingos)
+      if (esSabado(diaNum) || esDomingo(diaNum)) return
+
       const horasNum = parseInt(String(horas), 10)
       if (horasNum > 0 && horasNum < 8) {
         diasMenor8.push({
-          dia: `Día ${dia}`,
+          dia: `Día ${dia} (${getDiaSemanaBrev(diaNum)})`,
           horas: horasNum
         })
       }
@@ -734,6 +986,147 @@ const cerrarModalMenor8 = () => {
   trabajadoresMenor8.value = []
 }
 
+// Trabajadores sin trabajar (0 horas en días laborables lunes a viernes)
+const verTrabajadoresSinTrabajar = () => {
+  if (!reporteData.value || !reporteData.value.trabajadores) return
+
+  const trabajadoresConDiasSinTrabajar: any[] = []
+
+  reporteData.value.trabajadores.forEach((trabajador) => {
+    const diasSinTrabajar: any[] = []
+
+    // Revisar todos los días del mes
+    diasDelMes.value.forEach((dia) => {
+      // Solo considerar días de lunes a viernes
+      if (esSabado(dia) || esDomingo(dia)) return
+
+      const horas = trabajador.horasPorDia[dia]
+      const horasNum = horas ? parseInt(String(horas), 10) : 0
+
+      if (horasNum === 0) {
+        diasSinTrabajar.push({
+          dia: `Día ${dia} (${getDiaSemanaBrev(dia)})`,
+          horas: 0
+        })
+      }
+    })
+
+    if (diasSinTrabajar.length > 0) {
+      trabajadoresConDiasSinTrabajar.push({
+        trabajadorId: trabajador.trabajadorId,
+        nombre: trabajador.nombre,
+        cargo: trabajador.cargo,
+        diasSinTrabajar: diasSinTrabajar
+      })
+    }
+  })
+
+  trabajadoresSinTrabajar.value = trabajadoresConDiasSinTrabajar
+  mostrarModalSinTrabajar.value = true
+}
+
+const cerrarModalSinTrabajar = () => {
+  mostrarModalSinTrabajar.value = false
+  trabajadoresSinTrabajar.value = []
+}
+
+// Propuestos a Deficiente por ausentismo o incumplimiento de jornada
+const verPropuestosDeficiente = () => {
+  if (!reporteData.value || !reporteData.value.trabajadores) return
+
+  // Contar días laborables del mes (lunes a viernes)
+  let diasLaborables = 0
+  diasDelMes.value.forEach((dia) => {
+    if (!esSabado(dia) && !esDomingo(dia)) {
+      diasLaborables++
+    }
+  })
+  totalDiasLaborables.value = diasLaborables
+
+  const propuestos: any[] = []
+
+  // Umbral: 20% de días con problemas = propuesto a Deficiente
+  const UMBRAL_PORCENTAJE = 20
+
+  reporteData.value.trabajadores.forEach((trabajador) => {
+    let diasAusente = 0
+    let diasMenor8 = 0
+    const detalleAusencias: any[] = []
+    const detalleMenor8: any[] = []
+
+    // Revisar todos los días laborables
+    diasDelMes.value.forEach((dia) => {
+      if (esSabado(dia) || esDomingo(dia)) return
+
+      const horas = trabajador.horasPorDia[dia]
+      const horasNum = horas ? parseInt(String(horas), 10) : 0
+
+      if (horasNum === 0) {
+        diasAusente++
+        detalleAusencias.push({
+          dia: `Día ${dia} (${getDiaSemanaBrev(dia)})`,
+          horas: 0
+        })
+      } else if (horasNum < 8) {
+        diasMenor8++
+        detalleMenor8.push({
+          dia: `Día ${dia} (${getDiaSemanaBrev(dia)})`,
+          horas: horasNum
+        })
+      }
+    })
+
+    // Calcular porcentajes
+    const porcentajeAusencias = (diasAusente / diasLaborables) * 100
+    const porcentajeMenor8 = (diasMenor8 / diasLaborables) * 100
+    const porcentajeTotal = ((diasAusente + diasMenor8) / diasLaborables) * 100
+
+    // Determinar si es propuesto a Deficiente
+    const esPropuesto = porcentajeAusencias >= UMBRAL_PORCENTAJE ||
+                        porcentajeMenor8 >= UMBRAL_PORCENTAJE ||
+                        porcentajeTotal >= 30 // 30% combinado
+
+    if (esPropuesto) {
+      let motivo = ''
+      if (porcentajeAusencias >= UMBRAL_PORCENTAJE && porcentajeMenor8 >= UMBRAL_PORCENTAJE) {
+        motivo = 'Ausentismo + Incumplimiento de jornada'
+      } else if (porcentajeAusencias >= UMBRAL_PORCENTAJE) {
+        motivo = 'Alto ausentismo'
+      } else if (porcentajeMenor8 >= UMBRAL_PORCENTAJE) {
+        motivo = 'Incumplimiento de jornada'
+      } else {
+        motivo = 'Problemas combinados'
+      }
+
+      propuestos.push({
+        trabajadorId: trabajador.trabajadorId,
+        nombre: trabajador.nombre,
+        cargo: trabajador.cargo,
+        diasLaborables: diasLaborables,
+        diasAusente: diasAusente,
+        diasMenor8: diasMenor8,
+        porcentajeAusencias: porcentajeAusencias.toFixed(1),
+        porcentajeMenor8: porcentajeMenor8.toFixed(1),
+        porcentajeTotal: porcentajeTotal.toFixed(1),
+        motivo: motivo,
+        detalleAusencias: detalleAusencias,
+        detalleMenor8: detalleMenor8
+      })
+    }
+  })
+
+  // Ordenar por porcentaje total descendente
+  propuestos.sort((a, b) => parseFloat(b.porcentajeTotal) - parseFloat(a.porcentajeTotal))
+
+  propuestosDeficiente.value = propuestos
+  mostrarModalDeficiente.value = true
+}
+
+const cerrarModalDeficiente = () => {
+  mostrarModalDeficiente.value = false
+  propuestosDeficiente.value = []
+}
+
 // Escribir horas del consolidado en el Excel de prenómina y descargar
 const cargarHorasPrenomina = async () => {
   if (!reporteData.value || !reporteData.value.trabajadores) {
@@ -742,7 +1135,15 @@ const cargarHorasPrenomina = async () => {
   }
 
   // Confirmar antes de escribir
-  if (!confirm('¿Está seguro de generar el archivo de prenómina con las horas del consolidado?\n\nSe descargará un archivo Excel con las horas de cada trabajador.')) {
+  const confirmed = await confirmDialog.show({
+    title: 'Generar Prenómina',
+    message: 'Se generará un archivo Excel con las horas de cada trabajador del consolidado.',
+    confirmText: 'Generar',
+    cancelText: 'Cancelar',
+    type: 'info'
+  })
+
+  if (!confirmed) {
     return
   }
 
@@ -765,26 +1166,15 @@ const cargarHorasPrenomina = async () => {
     const nombreArchivo = `PRENOMINA_${mesSeleccionado.value}_${yearSeleccionado.value}`
 
     // Enviar al backend para escribir en el Excel
-    const response = await fetch(`/api/reporte/consolidado/escribir-prenomina?nombreArchivo=${encodeURIComponent(nombreArchivo)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(horasPorRuc)
-    })
+    const response = await ReporteConsolidadoService.escribirPrenomina(nombreArchivo, horasPorRuc)
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Error al escribir en el archivo de prenómina')
-    }
+    // Obtener estadísticas de los headers (axios usa lowercase)
+    const actualizados = parseInt(response.headers['x-actualizados'] || '0')
+    const noEncontrados = parseInt(response.headers['x-no-encontrados'] || '0')
+    const total = parseInt(response.headers['x-total'] || '0')
 
-    // Obtener estadísticas de los headers
-    const actualizados = parseInt(response.headers.get('X-Actualizados') || '0')
-    const noEncontrados = parseInt(response.headers.get('X-No-Encontrados') || '0')
-    const total = parseInt(response.headers.get('X-Total') || '0')
-
-    // Descargar el archivo
-    const blob = await response.blob()
+    // El blob ya está en response.data
+    const blob = response.data
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -838,6 +1228,52 @@ const cargarHorasPrenomina = async () => {
 const cerrarModalPrenomina = () => {
   mostrarModalPrenomina.value = false
   comparacionPrenomina.value = []
+}
+
+// Ver reportes donde participó un trabajador
+const verReportesTrabajador = async (trabajador: any) => {
+  if (!yearSeleccionado.value || !mesSeleccionado.value) {
+    alert('Seleccione un año y un mes para consultar')
+    return
+  }
+
+  trabajadorSeleccionado.value = trabajador
+  isLoadingReportesTrabajador.value = true
+  mostrarModalReportesTrabajador.value = true
+
+  try {
+    const response = await ReporteConsolidadoService.obtenerReportesPorTrabajador(
+      trabajador.trabajadorId,
+      yearSeleccionado.value,
+      mesSeleccionado.value
+    )
+    reportesTrabajador.value = response.data
+    console.log('Reportes del trabajador:', reportesTrabajador.value)
+  } catch (error) {
+    console.error('Error al obtener reportes del trabajador:', error)
+    alert('Error al consultar los reportes del trabajador.')
+  } finally {
+    isLoadingReportesTrabajador.value = false
+  }
+}
+
+const cerrarModalReportesTrabajador = () => {
+  mostrarModalReportesTrabajador.value = false
+  reportesTrabajador.value = []
+  trabajadorSeleccionado.value = null
+}
+
+// Abrir vista Excel para editar un reporte
+const abrirDetalleExcel = (reporte: any) => {
+  if (reporte.id) {
+    reporteDetalleId.value = reporte.id
+    mostrarModalDetalleExcel.value = true
+  }
+}
+
+const cerrarModalDetalleExcel = () => {
+  mostrarModalDetalleExcel.value = false
+  reporteDetalleId.value = null
 }
 
 // Inicializar con el mes actual
@@ -1018,7 +1454,7 @@ h2::before {
 
 .btn-faltantes {
   padding: 12px 20px;
-  background: linear-gradient(180deg, #1abc9c 0%, #16a085 100%);
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1028,13 +1464,13 @@ h2::before {
   font-size: 0.9em;
   white-space: nowrap;
   text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-  box-shadow: 0 2px 6px rgba(26, 188, 156, 0.3);
+  box-shadow: 0 2px 6px rgba(52, 152, 219, 0.3);
 }
 
 .btn-faltantes:hover:not(:disabled) {
-  background: linear-gradient(180deg, #2ecfab 0%, #1abc9c 100%);
+  background: linear-gradient(180deg, #52a8e8 0%, var(--color-primary) 100%);
   transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(26, 188, 156, 0.4);
+  box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);
 }
 
 .btn-faltantes:disabled {
@@ -1045,7 +1481,7 @@ h2::before {
 
 .btn-menor8 {
   padding: 12px 20px;
-  background: linear-gradient(180deg, #3498db 0%, #2980b9 100%);
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1059,12 +1495,66 @@ h2::before {
 }
 
 .btn-menor8:hover:not(:disabled) {
-  background: linear-gradient(180deg, #52a8e8 0%, #3498db 100%);
+  background: linear-gradient(180deg, #52a8e8 0%, var(--color-primary) 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 15px rgba(52, 152, 219, 0.4);
 }
 
 .btn-menor8:disabled {
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-sin-trabajar {
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s ease;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.3);
+}
+
+.btn-sin-trabajar:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ff6b5a 0%, #e74c3c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(231, 76, 60, 0.4);
+}
+
+.btn-sin-trabajar:disabled {
+  background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-deficiente {
+  padding: 12px 20px;
+  background: linear-gradient(180deg, #d35400 0%, #c0392b 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s ease;
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(211, 84, 0, 0.3);
+}
+
+.btn-deficiente:hover:not(:disabled) {
+  background: linear-gradient(180deg, #e67e22 0%, #d35400 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(211, 84, 0, 0.4);
+}
+
+.btn-deficiente:disabled {
   background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
   cursor: not-allowed;
   box-shadow: none;
@@ -1316,15 +1806,18 @@ h2::before {
 
 /* Tabla */
 .table-responsive {
-  overflow-x: auto;
+  overflow: auto;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
   background: #fff;
+  max-height: 70vh;
+  position: relative;
 }
 
 .reporte-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.85em;
   min-width: 800px;
 }
@@ -1337,6 +1830,13 @@ h2::before {
   white-space: nowrap;
 }
 
+/* Sticky header */
+.reporte-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .reporte-table thead th {
   background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 50%, #2f5a3c 100%);
   font-weight: 600;
@@ -1345,6 +1845,13 @@ h2::before {
   text-transform: uppercase;
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
   border: 1px solid #2f5a3c;
+  position: sticky;
+  top: 0;
+}
+
+/* Segunda fila de encabezados (números de día) - offset por altura de primera fila */
+.reporte-table thead tr:nth-child(2) th {
+  top: 26px;
 }
 
 .header-numero {
@@ -1983,7 +2490,7 @@ h2::before {
 
 .info-message.warning {
   background-color: #fff3cd;
-  border-left-color: #1abc9c;
+  border-left-color: var(--color-primary);
   color: #856404;
 }
 
@@ -2254,6 +2761,281 @@ h2::before {
   font-size: 1.05em;
 }
 
+/* ============ MODAL TRABAJADORES SIN TRABAJAR ============ */
+.modal-sin-trabajar {
+  background-color: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
+}
+
+.sin-trabajar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.info-message.warning {
+  background: linear-gradient(90deg, #fdf2f2 0%, #fff5f5 100%);
+  border-left: 4px solid #e74c3c;
+  color: #c0392b;
+}
+
+.trabajador-sin-trabajar {
+  border: 1px solid #f5e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fff 0%, #fdf8f8 100%);
+  transition: all 0.3s ease;
+}
+
+.trabajador-sin-trabajar:hover {
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15);
+  border-color: #e74c3c;
+}
+
+.dias-badge.ausente {
+  background: linear-gradient(180deg, #e74c3c 0%, #c0392b 100%);
+}
+
+.estado-col.ausente {
+  color: #e74c3c;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.no-sin-trabajar {
+  text-align: center;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.no-sin-trabajar p {
+  font-size: 1.05em;
+}
+
+/* ============ MODAL PROPUESTOS A DEFICIENTE ============ */
+.modal-deficiente {
+  background-color: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 1000px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.25);
+  border: 1px solid #e0e0e0;
+}
+
+.deficiente-header {
+  background: linear-gradient(180deg, #d35400 0%, #c0392b 100%) !important;
+}
+
+.deficiente-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.info-message.critical {
+  background: linear-gradient(90deg, #fdf2e9 0%, #fff5ee 100%);
+  border-left: 4px solid #d35400;
+  color: #a04000;
+}
+
+.criterios-box {
+  background: linear-gradient(180deg, #f8f9fa 0%, #ecf0f1 100%);
+  border-radius: 10px;
+  padding: 15px 20px;
+  border: 1px solid #ddd;
+}
+
+.criterios-box h4 {
+  margin: 0 0 10px 0;
+  color: #2c3e50;
+  font-size: 0.95em;
+}
+
+.criterios-box ul {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  list-style: none;
+}
+
+.criterios-box li {
+  font-size: 0.85em;
+  color: #555;
+}
+
+.criterio {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.criterio.ausencia {
+  background: #e74c3c;
+  color: white;
+}
+
+.criterio.menor8 {
+  background: #f39c12;
+  color: white;
+}
+
+.criterio.combinado {
+  background: #d35400;
+  color: white;
+}
+
+.trabajador-deficiente {
+  border: 1px solid #f5e0d0;
+  border-radius: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #fff 0%, #fdf8f5 100%);
+  transition: all 0.3s ease;
+}
+
+.trabajador-deficiente:hover {
+  box-shadow: 0 4px 12px rgba(211, 84, 0, 0.15);
+  border-color: #d35400;
+}
+
+.trabajador-header-def {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+  gap: 15px;
+}
+
+.motivo-badge {
+  background: linear-gradient(180deg, #d35400 0%, #c0392b 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.metrica {
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #eee;
+}
+
+.metrica.ausencias {
+  background: linear-gradient(180deg, #fdeaea 0%, #f9d5d5 100%);
+  border-color: #e74c3c;
+}
+
+.metrica.menor8h {
+  background: linear-gradient(180deg, #fef5e7 0%, #fde8c8 100%);
+  border-color: #f39c12;
+}
+
+.metrica.total {
+  background: linear-gradient(180deg, #fdf2e9 0%, #fadec5 100%);
+  border-color: #d35400;
+}
+
+.metrica-valor {
+  font-size: 1.8em;
+  font-weight: 800;
+  color: #2c3e50;
+}
+
+.metrica-label {
+  font-size: 0.75em;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  margin: 4px 0;
+}
+
+.metrica-porcentaje {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #c0392b;
+}
+
+.detalle-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #ddd;
+}
+
+.detalle-section h5 {
+  margin: 0 0 8px 0;
+  font-size: 0.85em;
+  color: #555;
+}
+
+.dias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dia-chip {
+  padding: 4px 10px;
+  border-radius: 15px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+.dia-chip.ausente {
+  background: #e74c3c;
+  color: white;
+}
+
+.dia-chip.menor8 {
+  background: #f39c12;
+  color: white;
+}
+
+.no-deficiente {
+  text-align: center;
+  padding: 50px 20px;
+  color: #27ae60;
+}
+
+.no-deficiente .success-icon {
+  font-size: 4em;
+  display: block;
+  margin-bottom: 15px;
+}
+
+.no-deficiente p {
+  font-size: 1.1em;
+  margin: 5px 0;
+}
+
+.no-deficiente .subtext {
+  font-size: 0.9em;
+  color: #7f8c8d;
+}
+
 /* ============ BOTÓN PRENÓMINA ============ */
 .btn-prenomina {
   padding: 12px 20px;
@@ -2479,13 +3261,187 @@ h2::before {
   margin-bottom: 20px;
 }
 
+/* ============ CLICKABLE NAME CELL ============ */
+.nombre-col.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nombre-col.clickable:hover {
+  background: linear-gradient(90deg, rgba(46, 125, 91, 0.15) 0%, transparent 100%) !important;
+}
+
+.nombre-col.clickable:hover strong {
+  color: #2E7D5B;
+  text-decoration: underline;
+}
+
+/* ============ MODAL REPORTES POR TRABAJADOR ============ */
+.modal-reportes-trabajador {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
+  border: 1px solid #e0e0e0;
+}
+
+.trabajador-info-header {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px;
+}
+
+.trabajador-info-header strong {
+  font-size: 1.2em;
+  color: #1b5e20;
+}
+
+.trabajador-info-header .subinfo {
+  color: #555;
+  font-size: 0.9em;
+}
+
+.periodo-badge {
+  background: linear-gradient(135deg, #2E7D5B 0%, #256B4D 100%);
+  color: white;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.reportes-trabajador-container {
+  overflow-y: auto;
+}
+
+.reportes-trabajador-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.reportes-trabajador-table th {
+  background: linear-gradient(180deg, #2E7D5B 0%, #256B4D 100%);
+  color: white;
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.5px;
+}
+
+.reportes-trabajador-table td {
+  padding: 10px 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.reportes-trabajador-table tbody tr:nth-child(even) {
+  background-color: rgba(74, 124, 89, 0.03);
+}
+
+.reportes-trabajador-table tbody tr:hover {
+  background: linear-gradient(90deg, rgba(46, 125, 91, 0.08) 0%, transparent 100%);
+}
+
+.reportes-trabajador-table .numero {
+  text-align: center;
+  font-weight: 600;
+  color: #666;
+  width: 40px;
+}
+
+.reportes-trabajador-table .codigo {
+  font-weight: 600;
+  color: #2E7D5B;
+}
+
+.reportes-trabajador-table .fecha {
+  font-weight: 500;
+}
+
+.reportes-trabajador-table .bloque,
+.reportes-trabajador-table .campo,
+.reportes-trabajador-table .area {
+  text-transform: capitalize;
+}
+
+.reportes-trabajador-table .responsable {
+  color: #555;
+}
+
+.no-reportes {
+  text-align: center;
+  padding: 50px 20px;
+  color: #7f8c8d;
+}
+
+.no-reportes .empty-icon {
+  font-size: 4em;
+  display: block;
+  margin-bottom: 20px;
+}
+
+/* Filas clickables en tabla de reportes */
+.fila-clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.fila-clickable:hover {
+  background: linear-gradient(90deg, rgba(46, 125, 91, 0.15) 0%, rgba(46, 125, 91, 0.05) 100%) !important;
+  transform: scale(1.005);
+}
+
+.fila-clickable:hover .codigo {
+  text-decoration: underline;
+}
+
+/* Modal Excel Container */
+.modal-excel-overlay {
+  z-index: 1100;
+}
+
+.modal-excel-container {
+  width: 95%;
+  max-width: 1400px;
+  max-height: 95vh;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
+}
+
 @media (max-width: 768px) {
   .modal-excedidos,
   .modal-faltantes,
   .modal-menor8,
-  .modal-prenomina {
+  .modal-sin-trabajar,
+  .modal-deficiente,
+  .modal-prenomina,
+  .modal-reportes-trabajador {
     width: 95%;
     max-height: 90vh;
+  }
+
+  .metricas-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .criterios-box ul {
+    flex-direction: column;
+    gap: 8px;
   }
 
   .modal-header {
@@ -2518,6 +3474,24 @@ h2::before {
   .horas-table th,
   .horas-table td {
     padding: 6px 10px;
+  }
+
+  .trabajador-info-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .periodo-badge {
+    margin-left: 0;
+  }
+
+  .reportes-trabajador-table {
+    font-size: 0.8em;
+  }
+
+  .reportes-trabajador-table th,
+  .reportes-trabajador-table td {
+    padding: 8px 10px;
   }
 }
 </style>

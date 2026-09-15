@@ -7,52 +7,47 @@ import type {
   DashboardResponse
 } from '@/types/Metricas'
 
-const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
+const API_BASE_URL = '/api/reporte'
 
 const ReportesMetricasService = {
   /**
    * Obtiene el reporte de ausentismo
    */
   obtenerAbsentismo(year: string, mes: string, trabajadorId?: string) {
-    const params: any = { year, mes }
+    const params: Record<string, string> = { year, mes }
     if (trabajadorId) {
       params.trabajadorId = trabajadorId
     }
-    return api.get<AbsentismoListResponse>('/reporte/metricas/ausentismo', { params })
+    return axios.get<AbsentismoListResponse>(`${API_BASE_URL}/metricas/ausentismo`, { params })
   },
 
   /**
    * Obtiene el reporte de productividad
    */
   obtenerProductividad(year: string, mes: string, trabajadorId?: string) {
-    const params: any = { year, mes }
+    const params: Record<string, string> = { year, mes }
     if (trabajadorId) {
       params.trabajadorId = trabajadorId
     }
-    return api.get<ProductividadListResponse>('/reporte/metricas/productividad', { params })
+    return axios.get<ProductividadListResponse>(`${API_BASE_URL}/metricas/productividad`, { params })
   },
 
   /**
    * Obtiene el reporte de rankings
    */
   obtenerRankings(year: string, mes: string, cargo?: string) {
-    const params: any = { year, mes }
+    const params: Record<string, string> = { year, mes }
     if (cargo) {
       params.cargo = cargo
     }
-    return api.get<RankingsListResponse>('/reporte/metricas/rankings', { params })
+    return axios.get<RankingsListResponse>(`${API_BASE_URL}/metricas/rankings`, { params })
   },
 
   /**
    * Obtiene el reporte de horas excedidas
    */
   obtenerHorasExceditasSummary(year: string, mes: string) {
-    return api.get<HorasExcedidasSummaryListResponse>('/reporte/metricas/horas-excedidas-summary', {
+    return axios.get<HorasExcedidasSummaryListResponse>(`${API_BASE_URL}/metricas/horas-excedidas-summary`, {
       params: { year, mes }
     })
   },
@@ -61,7 +56,7 @@ const ReportesMetricasService = {
    * Obtiene el dashboard consolidado con todos los reportes
    */
   obtenerDashboard(year: string, mes: string) {
-    return api.get<DashboardResponse>('/reporte/dashboard', {
+    return axios.get<DashboardResponse>(`${API_BASE_URL}/dashboard`, {
       params: { year, mes }
     })
   }

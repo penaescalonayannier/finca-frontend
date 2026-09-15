@@ -201,6 +201,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import ReporteConsolidadoService from '@/services/ReporteConsolidadoService'
+import AuthService from '@/services/AuthService'
 import type { ReporteConsolidadoPorResponsable } from '@/types/ReporteConsolidadoPorResponsable'
 import type { AxiosError } from 'axios'
 
@@ -322,14 +323,19 @@ const descargarPdf = async () => {
   try {
     isLoading.value = true
 
-    // Llamar al endpoint del backend para generar el PDF
+    const token = AuthService.getToken()
+    const headers: Record<string, string> = {
+      'Accept': 'application/pdf'
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(
       `/api/reporte/consolidado-por-responsable/pdf?year=${yearSeleccionado.value}&mes=${mesSeleccionado.value}`,
       {
         method: 'GET',
-        headers: {
-          'Accept': 'application/pdf'
-        }
+        headers
       }
     )
 
@@ -337,10 +343,8 @@ const descargarPdf = async () => {
       throw new Error(`Error al descargar PDF: ${response.statusText}`)
     }
 
-    // Obtener el blob del PDF
     const blob = await response.blob()
 
-    // Crear un link temporal para descargar
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -361,14 +365,19 @@ const descargarPdfResponsable = async (nombreResponsable: string) => {
   try {
     isLoading.value = true
 
-    // Llamar al endpoint del backend para generar el PDF completo
+    const token = AuthService.getToken()
+    const headers: Record<string, string> = {
+      'Accept': 'application/pdf'
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
     const response = await fetch(
       `/api/reporte/consolidado-por-responsable/pdf?year=${yearSeleccionado.value}&mes=${mesSeleccionado.value}`,
       {
         method: 'GET',
-        headers: {
-          'Accept': 'application/pdf'
-        }
+        headers
       }
     )
 
@@ -376,10 +385,8 @@ const descargarPdfResponsable = async (nombreResponsable: string) => {
       throw new Error(`Error al descargar PDF: ${response.statusText}`)
     }
 
-    // Obtener el blob del PDF
     const blob = await response.blob()
 
-    // Crear un link temporal para descargar
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url

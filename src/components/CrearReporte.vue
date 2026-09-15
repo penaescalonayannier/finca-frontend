@@ -5,6 +5,84 @@
     <h3>{{ isEditing ? 'Editar Reporte' : 'Nuevo Reporte' }}</h3>
 
     <form @submit.prevent="guardar">
+      <!-- Tipo de Reporte -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="tipoReporte">Tipo de Reporte *</label>
+          <select
+            id="tipoReporte"
+            v-model="form.tipoReporteId"
+            required
+            class="form-select"
+            @change="onTipoReporteChange"
+          >
+            <option value="">Seleccione un tipo de reporte</option>
+            <option
+              v-for="tr in tiposReporte"
+              :key="tr.id"
+              :value="tr.id"
+            >
+              {{ tr.nombre }}
+            </option>
+          </select>
+          <small v-if="tipoReporteSeleccionado" class="hint">
+            Centro de costo: {{ tipoReporteSeleccionado.codigoCentroCosto }}
+          </small>
+        </div>
+      </div>
+
+      <!-- Tipo de Cultivo (solo si el TipoReporte lo requiere) -->
+      <div v-if="mostrarTipoCultivo" class="form-row">
+        <div class="form-group">
+          <label for="tipoCultivo">Tipo de Cultivo *</label>
+          <select
+            id="tipoCultivo"
+            v-model="form.tipoCultivoId"
+            :required="mostrarTipoCultivo"
+            class="form-select"
+            @change="onTipoCultivoChange"
+            :disabled="!!tipoReporteSeleccionado?.tipoCultivoAutoId"
+          >
+            <option value="">Seleccione un tipo de cultivo</option>
+            <option
+              v-for="tc in tiposCultivoFiltrados"
+              :key="tc.id"
+              :value="tc.id"
+            >
+              {{ tc.nombre }}
+            </option>
+          </select>
+          <small v-if="tipoReporteSeleccionado?.tipoCultivoAutoId" class="hint hint-auto">
+            Auto-seleccionado por el tipo de reporte
+          </small>
+          <small v-else-if="tipoCultivoSeleccionado && !tipoCultivoSeleccionado.requiereCampo" class="hint">
+            Este cultivo NO requiere seleccionar Bloque y Campo
+          </small>
+        </div>
+      </div>
+
+      <!-- Tipo de Animal (solo si el TipoReporte es VAQUERIA) -->
+      <div v-if="mostrarTipoAnimal" class="form-row">
+        <div class="form-group">
+          <label for="tipoAnimal">Tipo de Animal *</label>
+          <select
+            id="tipoAnimal"
+            v-model="form.tipoAnimalId"
+            :required="mostrarTipoAnimal"
+            class="form-select"
+          >
+            <option :value="undefined">Seleccione un tipo de animal</option>
+            <option
+              v-for="ta in tiposAnimal"
+              :key="ta.id"
+              :value="ta.id"
+            >
+              {{ ta.nombre }}
+            </option>
+          </select>
+        </div>
+      </div>
+
       <!-- Información básica del reporte -->
       <div class="form-row">
         <div class="form-group form-group-half">
@@ -42,14 +120,15 @@
         </div>
       </div>
 
-      <div class="form-row">
+      <!-- Bloque y Campo: solo visibles si el tipo de cultivo lo requiere -->
+      <div v-if="requiereCampo" class="form-row">
         <div class="form-group form-group-half">
           <label for="bloque">Bloque *</label>
           <input
             id="bloque"
             v-model="form.bloque"
             type="text"
-            required
+            :required="requiereCampo"
             placeholder="Ej: B-001"
           />
         </div>
@@ -60,7 +139,7 @@
             id="campo"
             v-model="form.campo"
             type="text"
-            required
+            :required="requiereCampo"
             placeholder="Ej: Campo A"
           />
         </div>
@@ -68,12 +147,12 @@
 
       <div class="form-row">
         <div class="form-group form-group-half">
-          <label for="area">Área *</label>
+          <label for="area">Área {{ requiereCampo ? '*' : '' }}</label>
           <input
             id="area"
             v-model="form.area"
             type="text"
-            required
+            :required="requiereCampo"
             placeholder="Ej: Área 1"
           />
         </div>
@@ -164,9 +243,15 @@ import { ref, computed, onMounted, watch } from 'vue'
 import ReporteService from '@/services/ReporteService'
 import DiaTrabajoService from '@/services/DiaTrabajoService'
 import TrabajadorService from '@/services/TrabajadorService'
+import TipoCultivoService from '@/services/TipoCultivoService'
+import TipoReporteService from '@/services/TipoReporteService'
+import TipoAnimalService from '@/services/TipoAnimalService'
 import type { Reporte, ReporteRequest } from '@/types/Reporte'
 import type { DiaTrabajo, TrabajadorDia } from '@/types/DiaTrabajo'
 import type { Trabajador } from '@/types/Trabajador'
+import type { TipoCultivo, CategoriaTipoCultivo } from '@/types/TipoCultivo'
+import type { TipoReporte } from '@/types/TipoReporte'
+import type { TipoAnimal } from '@/types/TipoAnimal'
 import type { AxiosError } from 'axios'
 
 const props = defineProps<{
@@ -183,6 +268,90 @@ const isEditing = computed(() => !!props.reporte?.id)
 const isGuardando = ref(false)
 const trabajadores = ref<Trabajador[]>([])
 const diasOriginales = ref<DiaTrabajo[]>([])
+const tiposCultivo = ref<TipoCultivo[]>([])
+const tiposReporte = ref<TipoReporte[]>([])
+const tiposAnimal = ref<TipoAnimal[]>([])
+
+// Tipo de reporte seleccionado
+const tipoReporteSeleccionado = computed(() => {
+  if (!form.value.tipoReporteId) return null
+  return tiposReporte.value.find(tr => tr.id === form.value.tipoReporteId) || null
+})
+
+// Tipos de cultivo filtrados según el TipoReporte seleccionado
+const tiposCultivoFiltrados = computed(() => {
+  const tipoReporte = tipoReporteSeleccionado.value
+  if (!tipoReporte || tipoReporte.tipoSubclasificacion !== 'CULTIVO') {
+    return tiposCultivo.value
+  }
+
+  // Si hay un filtro de categoría, aplicarlo
+  if (tipoReporte.tipoCultivoCategoriaFiltro) {
+    return tiposCultivo.value.filter(tc => tc.categoria === tipoReporte.tipoCultivoCategoriaFiltro)
+  }
+
+  return tiposCultivo.value
+})
+
+// Mostrar dropdown de tipo de cultivo
+const mostrarTipoCultivo = computed(() => {
+  const tipoReporte = tipoReporteSeleccionado.value
+  return tipoReporte?.tipoSubclasificacion === 'CULTIVO'
+})
+
+// Mostrar dropdown de tipo de animal
+const mostrarTipoAnimal = computed(() => {
+  const tipoReporte = tipoReporteSeleccionado.value
+  return tipoReporte?.tipoSubclasificacion === 'ANIMAL'
+})
+
+// Tipo de cultivo seleccionado
+const tipoCultivoSeleccionado = computed(() => {
+  if (!form.value.tipoCultivoId) return null
+  return tiposCultivo.value.find(tc => tc.id === form.value.tipoCultivoId) || null
+})
+
+// Si el tipo de reporte requiere bloque/campo
+const requiereCampo = computed(() => {
+  // Prioridad: TipoReporte.requiereCampo > TipoCultivo.requiereCampo
+  const tipoReporte = tipoReporteSeleccionado.value
+  if (tipoReporte) {
+    return tipoReporte.requiereCampo
+  }
+  return tipoCultivoSeleccionado.value?.requiereCampo ?? true
+})
+
+// Cuando cambia el tipo de reporte
+const onTipoReporteChange = () => {
+  const tipoReporte = tipoReporteSeleccionado.value
+
+  // Reset subclasificaciones
+  form.value.tipoCultivoId = ''
+  form.value.tipoAnimalId = undefined
+
+  if (tipoReporte) {
+    // Auto-seleccionar tipo de cultivo si está configurado
+    if (tipoReporte.tipoCultivoAutoId) {
+      form.value.tipoCultivoId = tipoReporte.tipoCultivoAutoId
+    }
+  }
+
+  // Limpiar campos si no se requieren
+  if (!requiereCampo.value) {
+    form.value.bloque = ''
+    form.value.campo = ''
+    form.value.area = ''
+  }
+}
+
+// Cuando cambia el tipo de cultivo, limpiar campos si no se requieren
+const onTipoCultivoChange = () => {
+  if (!requiereCampo.value) {
+    form.value.bloque = ''
+    form.value.campo = ''
+    form.value.area = ''
+  }
+}
 
 // Trabajadores ordenados alfabéticamente
 const trabajadoresOrdenados = computed(() => {
@@ -218,7 +387,10 @@ const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 const currentMonth = meses[today.getMonth()]
 const currentDate = today.toISOString().split('T')[0]
 
-const form = ref<ReporteRequest & { dias: DiaConBusqueda[] }>({
+const form = ref<ReporteRequest & { dias: DiaConBusqueda[], tipoReporteId?: string, tipoAnimalId?: string }>({
+  tipoReporteId: '',
+  tipoCultivoId: '',
+  tipoAnimalId: undefined,
   codigo: '',
   bloque: '',
   campo: '',
@@ -230,6 +402,30 @@ const form = ref<ReporteRequest & { dias: DiaConBusqueda[] }>({
   trabajadorResponsableId: undefined,
   dias: []
 })
+
+const cargarTiposReporte = async () => {
+  try {
+    tiposReporte.value = await TipoReporteService.getAll()
+  } catch (error) {
+    console.error('Error al cargar tipos de reporte:', error)
+  }
+}
+
+const cargarTiposCultivo = async () => {
+  try {
+    tiposCultivo.value = await TipoCultivoService.getAll()
+  } catch (error) {
+    console.error('Error al cargar tipos de cultivo:', error)
+  }
+}
+
+const cargarTiposAnimal = async () => {
+  try {
+    tiposAnimal.value = await TipoAnimalService.getAll()
+  } catch (error) {
+    console.error('Error al cargar tipos de animal:', error)
+  }
+}
 
 const cargarTrabajadores = async () => {
   try {
@@ -273,6 +469,9 @@ const cargarDatos = async () => {
     }
 
     form.value = {
+      tipoReporteId: reporteCompleto.tipoReporteId || '',
+      tipoCultivoId: reporteCompleto.tipoCultivoId || '',
+      tipoAnimalId: reporteCompleto.tipoAnimalId || undefined,
       codigo: reporteCompleto.codigo || '',
       bloque: reporteCompleto.bloque || '',
       campo: reporteCompleto.campo || '',
@@ -363,19 +562,39 @@ const filtrarTrabajadoresPorDia = (diaIndex: number) => {
 
 
 const guardar = async () => {
-  // Validaciones básicas del reporte (el código se genera automáticamente en el backend)
-  if (!form.value.bloque.trim()) {
-    alert('El bloque es obligatorio')
+  // Validaciones básicas del reporte
+  if (!form.value.tipoReporteId) {
+    alert('El tipo de reporte es obligatorio')
     return
   }
-  if (!form.value.campo.trim()) {
-    alert('El campo es obligatorio')
+
+  // Validar según el tipo de subclasificación
+  if (mostrarTipoCultivo.value && !form.value.tipoCultivoId) {
+    alert('El tipo de cultivo es obligatorio para este tipo de reporte')
     return
   }
-  if (!form.value.area.trim()) {
-    alert('El área es obligatoria')
+
+  if (mostrarTipoAnimal.value && !form.value.tipoAnimalId) {
+    alert('El tipo de animal es obligatorio para este tipo de reporte')
     return
   }
+
+  // Validar bloque/campo solo si el tipo de cultivo lo requiere
+  if (requiereCampo.value) {
+    if (!form.value.bloque.trim()) {
+      alert('El bloque es obligatorio para este tipo de cultivo')
+      return
+    }
+    if (!form.value.campo.trim()) {
+      alert('El campo es obligatorio para este tipo de cultivo')
+      return
+    }
+    if (!form.value.area.trim()) {
+      alert('El área es obligatoria para este tipo de cultivo')
+      return
+    }
+  }
+
   if (!form.value.norma.trim()) {
     alert('La norma es obligatoria')
     return
@@ -474,6 +693,9 @@ watch(() => form.value.mes, () => {
 })
 
 onMounted(async () => {
+  await cargarTiposReporte()
+  await cargarTiposCultivo()
+  await cargarTiposAnimal()
   await cargarTrabajadores()
   await cargarDatos()
   // Cargar el próximo código si es creación
@@ -802,6 +1024,20 @@ h3 {
 
 .btn-cancelar:hover {
   background-color: #7f8c8d;
+}
+
+/* Hint text for tipo cultivo */
+.hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.85em;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.hint-auto {
+  color: #27ae60;
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {

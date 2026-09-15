@@ -31,10 +31,7 @@
       
       <div class="button-group">
         <button @click="buscarConReset" class="btn-buscar">Buscar</button>
-        <button @click="abrirModalAsignar" class="btn-crear">Asignar Producto</button>
-        <button v-if="seleccionados.length > 0" @click="exportarRelaciones" class="btn-exportar">
-          Exportar ({{ seleccionados.length }})
-        </button>
+        <button @click="abrirModalAsignar" class="btn-crear">+ Asignar Producto</button>
       </div>
     </div>
 
@@ -45,13 +42,6 @@
     <table v-else class="tabla-relaciones">
       <thead>
         <tr>
-          <th class="checkbox-col">
-            <input
-              type="checkbox"
-              :checked="todosSeleccionados"
-              @change="toggleSeleccionarTodos"
-            />
-          </th>
           <th>Finca</th>
           <th>Producto</th>
           <th>Precio</th>
@@ -62,16 +52,9 @@
       </thead>
       <tbody>
         <tr v-if="relaciones.length === 0">
-          <td colspan="7" class="no-data">No se encontraron relaciones</td>
+          <td colspan="6" class="no-data">No se encontraron relaciones</td>
         </tr>
         <tr v-for="relacion in relaciones" :key="relacion.id">
-          <td class="checkbox-col">
-            <input
-              type="checkbox"
-              :checked="estaSeleccionado(relacion.id)"
-              @change="toggleSeleccionar(relacion)"
-            />
-          </td>
           <td>
             <strong>{{ relacion.fincaCode }}</strong>
             <span class="subtext">{{ relacion.fincaName }}</span>
@@ -80,20 +63,23 @@
             <strong>{{ relacion.productoCode }}</strong>
             <span class="subtext">{{ relacion.productoName }}</span>
           </td>
-          <td class="price-cell">${{ relacion.productoPrice.toFixed(2) }}</td>
+          <td class="price-cell">${{ relacion.productoPrice?.toFixed(2) || '0.00' }}</td>
           <td>
-            <span :class="['stock-badge', getStockClass(relacion.stock)]">
+            <span :class="['stock-badge', getStockClass(relacion)]" :title="'Mín: ' + relacion.stockMinimo + (relacion.stockMaximo ? ' | Máx: ' + relacion.stockMaximo : '')">
               {{ relacion.stock }}
+              <span v-if="relacion.estadoStock" class="estado-label">{{ getEstadoLabel(relacion) }}</span>
             </span>
           </td>
           <td class="price-cell total-cell">
-            ${{ (relacion.productoPrice * relacion.stock).toFixed(2) }}
+            ${{ ((relacion.productoPrice || 0) * relacion.stock).toFixed(2) }}
           </td>
           <td class="acciones">
-            <button @click="abrirModalEntrada(relacion)" class="btn-entrada">📥 Entrada</button>
-            <button @click="abrirModalSalida(relacion)" class="btn-salida">📤 Salida</button>
-            <button @click="editarStock(relacion)" class="btn-editar">✏️ Stock</button>
-            <button @click="confirmarRemover(relacion)" class="btn-eliminar">🗑️</button>
+            <button @click="abrirModalAjuste(relacion)" class="btn-ajuste" title="Ajustar existencias por almacén">
+              ⚖️ Ajustar
+            </button>
+            <button @click="confirmarEliminar(relacion)" class="btn-eliminar" title="Eliminar relación">
+              🗑️
+            </button>
           </td>
         </tr>
       </tbody>
@@ -126,271 +112,103 @@
     </div>
 
     <!-- Modal Asignar Producto -->
-    <div v-if="mostrarModalAsignar" class="modal">
+    <div v-if="mostrarModalAsignar" class="modal" @click.self="cerrarModalAsignar">
       <div class="modal-content modal-asignar">
         <span class="close" @click="cerrarModalAsignar">&times;</span>
         <h3>Asignar Producto a Finca</h3>
-        
-        <form @submit.prevent="asignarProducto">
-          <div class="form-group">
-            <label>Finca *</label>
-            <select v-model="formAsignar.fincaId" required class="form-select">
-              <option value="">Seleccione una finca</option>
-              <option v-for="finca in fincas" :key="finca.id" :value="finca.id">
-                {{ finca.code }} - {{ finca.name }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Producto *</label>
-            <select v-model="formAsignar.productoId" required class="form-select">
-              <option value="">Seleccione un producto</option>
-              <option v-for="producto in productos" :key="producto.id" :value="producto.id">
-                {{ producto.code }} - {{ producto.name }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Stock Inicial *</label>
-            <input
-              v-model.number="formAsignar.stock"
-              type="number"
-              required
-              min="0"
-              class="form-input"
-              placeholder="0"
-            />
-          </div>
-
-          <div class="form-actions">
-            <button type="submit" class="btn-guardar" :disabled="isGuardando">
-              {{ isGuardando ? 'Asignando...' : 'Asignar' }}
-            </button>
-            <button type="button" class="btn-cancelar" @click="cerrarModalAsignar">Cancelar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Modal Editar Stock -->
-    <div v-if="mostrarModalStock" class="modal">
-      <div class="modal-content modal-small">
-        <span class="close" @click="cerrarModalStock">&times;</span>
-        <h3>Actualizar Stock</h3>
-        <p>
-          <strong>{{ relacionStock?.productoName }}</strong>
-          en <strong>{{ relacionStock?.fincaName }}</strong>
-        </p>
-        
-        <div class="form-group">
-          <label>Stock Actual: {{ relacionStock?.stock }}</label>
-          <input
-            v-model.number="formStock.stock"
-            type="number"
-            required
-            min="0"
-            class="form-input"
-            placeholder="Nuevo stock"
-          />
-        </div>
-
-        <div class="form-actions">
-          <button @click="actualizarStockHandler" class="btn-guardar" :disabled="isGuardando">
-            {{ isGuardando ? 'Actualizando...' : 'Actualizar' }}
-          </button>
-          <button type="button" class="btn-cancelar" @click="cerrarModalStock">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Confirmar Remover -->
-    <div v-if="mostrarModalRemover" class="modal">
-      <div class="modal-content modal-small">
-        <h3>Confirmar Remoción</h3>
-        <p>
-          ¿Remover el producto <strong>{{ relacionRemover?.productoName }}</strong>
-          de la finca <strong>{{ relacionRemover?.fincaName }}</strong>?
-        </p>
-        <div class="modal-buttons">
-          <button @click="removerProducto" class="btn-eliminar">Remover</button>
-          <button @click="mostrarModalRemover = false" class="btn-cancelar">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Entrada de Producción -->
-    <div v-if="mostrarModalEntrada" class="modal">
-      <div class="modal-content modal-entrada">
-        <span class="close" @click="cerrarModalEntrada">&times;</span>
-        <h3>Entrada de Producción</h3>
-        <p>
-          <strong>{{ relacionEntrada?.productoName }}</strong>
-          en <strong>{{ relacionEntrada?.fincaName }}</strong>
-        </p>
-        <p class="stock-actual">Stock actual: <span class="stock-value">{{ relacionEntrada?.stock }}</span></p>
 
         <div class="form-group">
-          <label>Cantidad Terminada *</label>
-          <input
-            v-model.number="formEntrada.cantidadTerminada"
-            type="number"
-            required
-            min="1"
-            class="form-input"
-            placeholder="Cantidad"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>Trabajador que Entrega *</label>
-          <select v-model="formEntrada.trabajadorEntregaId" required class="form-select">
-            <option value="">Seleccione un trabajador</option>
-            <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
-              {{ trabajador.nombre }}
+          <label>Finca *</label>
+          <select v-model="formAsignar.fincaId" class="form-select" required>
+            <option value="">Seleccione una finca</option>
+            <option v-for="finca in fincas" :key="finca.id" :value="finca.id">
+              {{ finca.code }} - {{ finca.name }}
             </option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>Trabajador que Recibe *</label>
-          <select v-model="formEntrada.trabajadorRecibeId" required class="form-select">
-            <option value="">Seleccione un trabajador</option>
-            <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
-              {{ trabajador.nombre }}
+          <label>Producto *</label>
+          <select v-model="formAsignar.productoId" class="form-select" required>
+            <option value="">Seleccione un producto</option>
+            <option v-for="producto in productos" :key="producto.id" :value="producto.id">
+              {{ producto.code }} - {{ producto.name }}
             </option>
           </select>
-        </div>
-
-        <div class="form-group">
-          <label>Observaciones</label>
-          <textarea
-            v-model="formEntrada.observaciones"
-            class="form-input form-textarea"
-            placeholder="Observaciones opcionales..."
-            rows="2"
-          ></textarea>
-        </div>
-
-        <div class="preview-entrada" v-if="formEntrada.cantidadTerminada > 0">
-          Nuevo stock: <strong>{{ (relacionEntrada?.stock || 0) + formEntrada.cantidadTerminada }}</strong>
-        </div>
-
-        <div class="form-actions">
-          <button @click="entradaProduccionHandler" class="btn-guardar" :disabled="isGuardando || formEntrada.cantidadTerminada <= 0">
-            {{ isGuardando ? 'Registrando...' : 'Registrar Entrada' }}
-          </button>
-          <button type="button" class="btn-cancelar" @click="cerrarModalEntrada">Cancelar</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal Salida -->
-    <div v-if="mostrarModalSalida" class="modal">
-      <div class="modal-content modal-salida">
-        <span class="close" @click="cerrarModalSalida">&times;</span>
-        <h3>Registrar Salida</h3>
-        <p>
-          <strong>{{ relacionSalida?.productoName }}</strong>
-          en <strong>{{ relacionSalida?.fincaName }}</strong>
-        </p>
-        <p class="stock-actual">Stock actual: <span class="stock-value">{{ relacionSalida?.stock }}</span></p>
-
-        <div v-if="esInsumo" class="aviso-insumo">
-          Este producto es de tipo <strong>INSUMO</strong>. Solo puede destinarse a Comedor u Otros.
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label>Tipo de Salida *</label>
-            <select v-model="formSalida.tipo" required class="form-select">
-              <option value="">Seleccione tipo</option>
-              <option value="VALE">Vale</option>
-              <option value="FACTURA">Factura</option>
-            </select>
+            <label>Stock Inicial</label>
+            <input v-model.number="formAsignar.stock" type="number" min="0" class="form-input" placeholder="0" />
           </div>
-
           <div class="form-group">
-            <label>Destino *</label>
-            <select v-model="formSalida.destino" required class="form-select">
-              <option value="">Seleccione destino</option>
-              <option value="TRABAJADORES" :disabled="esInsumo">Trabajadores {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
-              <option value="COMEDOR">Comedor</option>
-              <option value="VENTA_ESTADO" :disabled="esInsumo">Venta Estado {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
-              <option value="POBLACION" :disabled="esInsumo">Población {{ esInsumo ? '(No disponible para Insumos)' : '' }}</option>
-              <option value="INSUMO">Insumo</option>
-              <option value="OTROS">Otros</option>
-            </select>
+            <label>Stock Mínimo</label>
+            <input v-model.number="formAsignar.stockMinimo" type="number" min="0" class="form-input" placeholder="0" />
           </div>
         </div>
 
-        <!-- Items de salida -->
-        <div class="items-section">
-          <div class="items-header">
-            <h4>Items de Salida</h4>
-            <button type="button" @click="agregarItemSalida" class="btn-agregar-item">+ Agregar</button>
+        <div class="form-actions">
+          <button @click="cerrarModalAsignar" class="btn-cancelar">Cancelar</button>
+          <button @click="asignarProducto" class="btn-guardar" :disabled="!formAsignar.fincaId || !formAsignar.productoId || isGuardando">
+            {{ isGuardando ? 'Guardando...' : 'Asignar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Ajuste de Stock por Almacén -->
+    <div v-if="mostrarModalAjuste" class="modal" @click.self="cerrarModalAjuste">
+      <div class="modal-content modal-ajuste">
+        <span class="close" @click="cerrarModalAjuste">&times;</span>
+        <h3>Ajustar existencias</h3>
+        <p v-if="relacionAjuste" class="ajuste-resumen">
+          <strong>{{ relacionAjuste.productoName }}</strong> · {{ relacionAjuste.fincaName }}
+          <br>Stock total actual: <strong>{{ relacionAjuste.stock }}</strong>
+        </p>
+
+        <div class="form-group">
+          <label>Almacén afectado *</label>
+          <select v-model="formAjuste.almacenId" class="form-select" :disabled="cargandoAlmacenes || isAjustando">
+            <option value="">{{ cargandoAlmacenes ? 'Cargando almacenes...' : 'Seleccione un almacén' }}</option>
+            <option v-for="almacenProducto in almacenesProducto" :key="almacenProducto.id" :value="almacenProducto.almacenId">
+              {{ almacenProducto.almacenNombre }} — disponible: {{ almacenProducto.stock }}
+            </option>
+          </select>
+          <small v-if="!cargandoAlmacenes && almacenesProducto.length === 0" class="field-help error-text">
+            Este producto no está asignado a ningún almacén activo.
+          </small>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Operación *</label>
+            <select v-model="formAjuste.tipoMovimiento" class="form-select" :disabled="isAjustando">
+              <option value="ENTRADA_AJUSTE">Aumentar existencia</option>
+              <option value="SALIDA_AJUSTE">Disminuir existencia</option>
+            </select>
           </div>
-
-          <div v-for="(item, index) in formSalida.items" :key="index" class="item-row">
-            <div class="form-group item-field">
-              <label>Trabajador *</label>
-              <select v-model="item.trabajadorId" required class="form-select">
-                <option value="">Seleccione</option>
-                <option v-for="t in trabajadores" :key="t.id" :value="t.id">
-                  {{ t.nombre }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group item-field-small">
-              <label>Cantidad *</label>
-              <input v-model.number="item.cantidad" type="number" min="1" required class="form-input" />
-            </div>
-
-            <div v-if="formSalida.destino === 'TRABAJADORES'" class="form-group item-field-checkbox">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="item.pagado" />
-                <span class="checkmark"></span>
-                Pagado
-              </label>
-            </div>
-
-            <button type="button" @click="eliminarItemSalida(index)" class="btn-eliminar-item" v-if="formSalida.items.length > 1">
-              X
-            </button>
-          </div>
-
-          <div class="total-items">
-            Total a salir: <strong>{{ calcularTotalSalida() }}</strong>
-            <span v-if="relacionSalida && calcularTotalSalida() > relacionSalida.stock" class="error-stock">
-              (Excede el stock disponible)
-            </span>
+          <div class="form-group">
+            <label>Cantidad *</label>
+            <input v-model.number="formAjuste.cantidad" type="number" min="1" step="1" class="form-input" :disabled="isAjustando" />
           </div>
         </div>
 
         <div class="form-group">
-          <label>Observaciones</label>
-          <textarea
-            v-model="formSalida.observaciones"
-            class="form-input form-textarea"
-            placeholder="Observaciones opcionales..."
-            rows="2"
-          ></textarea>
-        </div>
-
-        <div class="preview-salida" v-if="calcularTotalSalida() > 0 && relacionSalida && calcularTotalSalida() <= relacionSalida.stock">
-          Nuevo stock: <strong>{{ relacionSalida.stock - calcularTotalSalida() }}</strong>
+          <label>Motivo del ajuste *</label>
+          <textarea v-model.trim="formAjuste.observaciones" class="form-input" rows="3" maxlength="500" :disabled="isAjustando"
+            placeholder="Ej.: Conteo físico de inventario"></textarea>
         </div>
 
         <div class="form-actions">
-          <button @click="salidaHandler" class="btn-guardar" :disabled="isGuardando || !validarFormSalida()">
-            {{ isGuardando ? 'Registrando...' : 'Registrar Salida' }}
+          <button @click="cerrarModalAjuste" class="btn-cancelar" :disabled="isAjustando">Cancelar</button>
+          <button @click="guardarAjuste" class="btn-guardar" :disabled="!puedeGuardarAjuste || isAjustando">
+            {{ isAjustando ? 'Guardando...' : 'Aplicar ajuste' }}
           </button>
-          <button type="button" class="btn-cancelar" @click="cerrarModalSalida">Cancelar</button>
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -399,85 +217,65 @@ import { ref, computed, onMounted, watch } from 'vue'
 import FincaProductoService from '@/services/FincaProductoService'
 import FincaService from '@/services/FincaService'
 import ProductoService from '@/services/ProductoService'
-import TrabajadorService from '@/services/TrabajadorService'
-import ProduccionTerminadaService from '@/services/ProduccionTerminadaService'
-import SalidaService from '@/services/SalidaService'
+import AlmacenService from '@/services/AlmacenService'
+import MovimientoStockService from '@/services/MovimientoStockService'
+import { notify } from '@/composables/useNotification'
 import type { FincaProducto } from '@/types/FincaProducto'
-import type { TipoSalida, DestinoSalida, ItemSalida } from '@/types/Salida'
 import type { Finca } from '@/types/Finca'
 import type { Producto } from '@/types/Producto'
-import type { Trabajador } from '@/types/Trabajador'
+import type { AlmacenFincaProducto } from '@/types/Almacen'
 import type { SearchFilter } from '@/types/EstadoCuenta'
+
+interface ApiErrorResponse {
+  message?: string
+  errorFields?: Array<{ message?: string }>
+}
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  const data = (error as { response?: { data?: ApiErrorResponse } })?.response?.data
+  return data?.errorFields?.map(field => field.message).filter(Boolean).join('. ')
+    || data?.message
+    || fallback
+}
 
 // Estado
 const relaciones = ref<FincaProducto[]>([])
 const fincas = ref<Finca[]>([])
 const productos = ref<Producto[]>([])
-const trabajadores = ref<Trabajador[]>([])
 const isLoading = ref(false)
-const isGuardando = ref(false)
 const searchQuery = ref('')
 const paginaActual = ref(0)
 const tamanoPagina = ref(10)
 const totalElementos = ref(0)
-const seleccionados = ref<string[]>([])
 const filtroFinca = ref('')
 const filtroProducto = ref('')
-
-// Modales
 const mostrarModalAsignar = ref(false)
-const mostrarModalStock = ref(false)
-const mostrarModalRemover = ref(false)
-const mostrarModalEntrada = ref(false)
-const mostrarModalSalida = ref(false)
-
-// Formularios
+const isGuardando = ref(false)
+const mostrarModalAjuste = ref(false)
+const cargandoAlmacenes = ref(false)
+const isAjustando = ref(false)
+const relacionAjuste = ref<FincaProducto | null>(null)
+const almacenesProducto = ref<AlmacenFincaProducto[]>([])
 const formAsignar = ref({
   fincaId: '',
   productoId: '',
-  stock: 0
+  stock: 0,
+  stockMinimo: 0
 })
-
-const formStock = ref({
-  stock: 0
-})
-
-const relacionStock = ref<FincaProducto | null>(null)
-const relacionRemover = ref<FincaProducto | null>(null)
-const relacionEntrada = ref<FincaProducto | null>(null)
-
-const formEntrada = ref({
-  cantidadTerminada: 0,
-  trabajadorEntregaId: '',
-  trabajadorRecibeId: '',
+const formAjuste = ref({
+  almacenId: '',
+  tipoMovimiento: 'ENTRADA_AJUSTE' as 'ENTRADA_AJUSTE' | 'SALIDA_AJUSTE',
+  cantidad: 1,
   observaciones: ''
-})
-
-const relacionSalida = ref<FincaProducto | null>(null)
-const formSalida = ref({
-  tipo: '' as TipoSalida | '',
-  destino: '' as DestinoSalida | '',
-  observaciones: '',
-  items: [{ trabajadorId: '', cantidad: 0, pagado: false }] as ItemSalida[]
 })
 
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
-
-const todosSeleccionados = computed(() => {
-  return relaciones.value.length > 0 && relaciones.value.every(r => estaSeleccionado(r.id))
-})
-
-const esInsumo = computed(() => {
-  return relacionSalida.value?.productoTipo === 'INSUMO'
-})
-
-// Watcher para limpiar destino inválido cuando el producto es INSUMO
-watch([esInsumo, () => formSalida.value.destino], ([isInsumo, destino]) => {
-  if (isInsumo && ['TRABAJADORES', 'VENTA_ESTADO', 'POBLACION'].includes(destino as string)) {
-    formSalida.value.destino = ''
-  }
-})
+const puedeGuardarAjuste = computed(() =>
+  Boolean(formAjuste.value.almacenId) &&
+  formAjuste.value.cantidad > 0 &&
+  Boolean(formAjuste.value.observaciones.trim())
+)
 
 // Métodos
 const cargarFincas = async () => {
@@ -495,15 +293,6 @@ const cargarProductos = async () => {
     productos.value = response.data.data || []
   } catch (error) {
     console.error('Error al cargar productos:', error)
-  }
-}
-
-const cargarTrabajadores = async () => {
-  try {
-    const response = await TrabajadorService.getAll()
-    trabajadores.value = response.data.data || []
-  } catch (error) {
-    console.error('Error al cargar trabajadores:', error)
   }
 }
 
@@ -552,263 +341,188 @@ const cambiarTamanoPagina = () => {
   cargarRelaciones()
 }
 
-// Selección
-const estaSeleccionado = (id: string): boolean => {
-  return seleccionados.value.includes(id)
-}
-
-const toggleSeleccionar = (relacion: FincaProducto) => {
-  const index = seleccionados.value.indexOf(relacion.id)
-  if (index > -1) {
-    seleccionados.value.splice(index, 1)
-  } else {
-    seleccionados.value.push(relacion.id)
-  }
-}
-
-const toggleSeleccionarTodos = () => {
-  if (todosSeleccionados.value) {
-    seleccionados.value = []
-  } else {
-    seleccionados.value = relaciones.value.map(r => r.id)
-  }
-}
-
-// Asignar producto
+// Modal Asignar
 const abrirModalAsignar = () => {
-  formAsignar.value = { fincaId: '', productoId: '', stock: 0 }
+  formAsignar.value = {
+    fincaId: '',
+    productoId: '',
+    stock: 0,
+    stockMinimo: 0
+  }
   mostrarModalAsignar.value = true
 }
 
 const cerrarModalAsignar = () => {
   mostrarModalAsignar.value = false
-  formAsignar.value = { fincaId: '', productoId: '', stock: 0 }
 }
 
 const asignarProducto = async () => {
   if (!formAsignar.value.fincaId || !formAsignar.value.productoId) {
-    alert('Seleccione una finca y un producto')
+    notify.warning('Campos requeridos', 'Debe seleccionar una finca y un producto')
     return
   }
 
   isGuardando.value = true
   try {
-    await FincaProductoService.asignarProductoAFinca(formAsignar.value)
+    await FincaProductoService.asignarProductoAFinca({
+      fincaId: formAsignar.value.fincaId,
+      productoId: formAsignar.value.productoId,
+      stock: formAsignar.value.stock || 0,
+      stockMinimo: formAsignar.value.stockMinimo || 0
+    })
+    notify.success('Producto asignado', 'El producto fue asignado a la finca correctamente')
     cerrarModalAsignar()
     cargarRelaciones()
   } catch (error: any) {
-    console.error('Error al asignar:', error)
-    alert(error.response?.data?.message || 'Error al asignar el producto')
+    console.error('Error al asignar producto:', error)
+    const errorData = error.response?.data
+    let mensaje = 'Error al asignar el producto'
+    if (errorData?.errorFields?.length > 0) {
+      mensaje = errorData.errorFields.map((e: any) => e.message).join('. ')
+    } else if (errorData?.message) {
+      mensaje = errorData.message
+    }
+    notify.error('Error', mensaje)
   } finally {
     isGuardando.value = false
   }
 }
 
-// Editar stock
-const editarStock = (relacion: FincaProducto) => {
-  relacionStock.value = relacion
-  formStock.value = { stock: relacion.stock }
-  mostrarModalStock.value = true
+const abrirModalAjuste = async (relacion: FincaProducto) => {
+  relacionAjuste.value = relacion
+  formAjuste.value = {
+    almacenId: '',
+    tipoMovimiento: 'ENTRADA_AJUSTE',
+    cantidad: 1,
+    observaciones: ''
+  }
+  almacenesProducto.value = []
+  mostrarModalAjuste.value = true
+  cargandoAlmacenes.value = true
+
+  try {
+    const response = await AlmacenService.obtenerAlmacenesPorFincaProducto(relacion.id)
+    almacenesProducto.value = response.data || []
+  } catch (error) {
+    console.error('Error al cargar almacenes del producto:', error)
+    notify.error('Error', 'No se pudieron cargar los almacenes disponibles')
+  } finally {
+    cargandoAlmacenes.value = false
+  }
 }
 
-const cerrarModalStock = () => {
-  mostrarModalStock.value = false
-  relacionStock.value = null
+const cerrarModalAjuste = () => {
+  if (isAjustando.value) return
+  mostrarModalAjuste.value = false
+  relacionAjuste.value = null
+  almacenesProducto.value = []
 }
 
-const actualizarStockHandler = async () => {
-  if (!relacionStock.value) return
-  if (formStock.value.stock < 0) {
-    alert('El stock no puede ser negativo')
+const guardarAjuste = async () => {
+  if (!relacionAjuste.value || !puedeGuardarAjuste.value) return
+
+  const almacenSeleccionado = almacenesProducto.value.find(
+    item => item.almacenId === formAjuste.value.almacenId
+  )
+  if (!almacenSeleccionado) {
+    notify.warning('Almacén requerido', 'Seleccione un almacén válido para el ajuste')
+    return
+  }
+  if (formAjuste.value.tipoMovimiento === 'SALIDA_AJUSTE' && formAjuste.value.cantidad > almacenSeleccionado.stock) {
+    notify.warning('Stock insuficiente', `El almacén solo dispone de ${almacenSeleccionado.stock} unidades`)
     return
   }
 
-  isGuardando.value = true
+  isAjustando.value = true
   try {
-    await FincaProductoService.actualizarStock({
-      fincaId: relacionStock.value.fincaId,
-      productoId: relacionStock.value.productoId,
-      stock: formStock.value.stock
+    await MovimientoStockService.crearAjuste({
+      almacenId: formAjuste.value.almacenId,
+      fincaProductoId: relacionAjuste.value.id,
+      tipoMovimiento: formAjuste.value.tipoMovimiento,
+      cantidad: formAjuste.value.cantidad,
+      observaciones: formAjuste.value.observaciones
     })
-    cerrarModalStock()
+    notify.success('Ajuste aplicado', 'Se actualizó el stock de la finca y del almacén seleccionado')
+    isAjustando.value = false
+    cerrarModalAjuste()
     cargarRelaciones()
-  } catch (error: any) {
-    console.error('Error al actualizar stock:', error)
-    alert(error.response?.data?.message || 'Error al actualizar el stock')
+  } catch (error: unknown) {
+    console.error('Error al ajustar existencias:', error)
+    notify.error('Error', getApiErrorMessage(error, 'No se pudo aplicar el ajuste de existencias'))
   } finally {
-    isGuardando.value = false
+    isAjustando.value = false
   }
 }
 
-// Remover producto
-const confirmarRemover = (relacion: FincaProducto) => {
-  relacionRemover.value = relacion
-  mostrarModalRemover.value = true
-}
+// Eliminar relación
+const confirmarEliminar = async (relacion: FincaProducto) => {
+  // Validar stock antes de intentar eliminar
+  if (relacion.stock > 0) {
+    notify.warning(
+      'No se puede eliminar',
+      `El producto tiene ${relacion.stock} unidades en stock. Debe llevar el stock a 0 antes de eliminar.`
+    )
+    return
+  }
 
-const removerProducto = async () => {
-  if (!relacionRemover.value) return
+  const mensaje = `¿Está seguro de eliminar el producto "${relacion.productoName}" de la finca "${relacion.fincaName}"?`
+
+  if (!confirm(mensaje)) return
 
   try {
     await FincaProductoService.removerProductoDeFinca({
-      fincaId: relacionRemover.value.fincaId,
-      productoId: relacionRemover.value.productoId
+      fincaId: relacion.fincaId,
+      productoId: relacion.productoId
     })
-    mostrarModalRemover.value = false
-    relacionRemover.value = null
+    notify.success('Eliminado', 'El producto fue removido de la finca correctamente')
     cargarRelaciones()
   } catch (error: any) {
-    console.error('Error al remover:', error)
-    alert(error.response?.data?.message || 'Error al remover el producto')
+    console.error('Error al eliminar:', error)
+    const errorData = error.response?.data
+    let errorMsg = 'Error al eliminar el producto de la finca'
+    if (errorData?.errorFields?.length > 0) {
+      errorMsg = errorData.errorFields.map((e: any) => e.message).join('. ')
+    } else if (errorData?.message) {
+      errorMsg = errorData.message
+    }
+    notify.error('Error', errorMsg)
   }
-}
-
-// Entrada de producción
-const abrirModalEntrada = (relacion: FincaProducto) => {
-  relacionEntrada.value = relacion
-  formEntrada.value = {
-    cantidadTerminada: 0,
-    trabajadorEntregaId: '',
-    trabajadorRecibeId: '',
-    observaciones: ''
-  }
-  mostrarModalEntrada.value = true
-}
-
-const cerrarModalEntrada = () => {
-  mostrarModalEntrada.value = false
-  relacionEntrada.value = null
-  formEntrada.value = {
-    cantidadTerminada: 0,
-    trabajadorEntregaId: '',
-    trabajadorRecibeId: '',
-    observaciones: ''
-  }
-}
-
-const entradaProduccionHandler = async () => {
-  if (!relacionEntrada.value) return
-  if (formEntrada.value.cantidadTerminada <= 0) {
-    alert('La cantidad debe ser mayor a 0')
-    return
-  }
-  if (!formEntrada.value.trabajadorEntregaId) {
-    alert('Debe seleccionar el trabajador que entrega')
-    return
-  }
-  if (!formEntrada.value.trabajadorRecibeId) {
-    alert('Debe seleccionar el trabajador que recibe')
-    return
-  }
-
-  isGuardando.value = true
-  try {
-    // Crear registro de producción terminada
-    await ProduccionTerminadaService.create({
-      fincaId: relacionEntrada.value.fincaId,
-      productoId: relacionEntrada.value.productoId,
-      cantidadTerminada: formEntrada.value.cantidadTerminada,
-      trabajadorEntregaId: formEntrada.value.trabajadorEntregaId,
-      trabajadorRecibeId: formEntrada.value.trabajadorRecibeId,
-      observaciones: formEntrada.value.observaciones || undefined
-    })
-    cerrarModalEntrada()
-    cargarRelaciones()
-  } catch (error: any) {
-    console.error('Error en entrada de producción:', error)
-    alert(error.response?.data?.message || 'Error al registrar entrada de producción')
-  } finally {
-    isGuardando.value = false
-  }
-}
-
-// Salida
-const abrirModalSalida = (relacion: FincaProducto) => {
-  relacionSalida.value = relacion
-  formSalida.value = {
-    tipo: '',
-    destino: '',
-    observaciones: '',
-    items: [{ trabajadorId: '', cantidad: 0, pagado: false }]
-  }
-  mostrarModalSalida.value = true
-}
-
-const cerrarModalSalida = () => {
-  mostrarModalSalida.value = false
-  relacionSalida.value = null
-  formSalida.value = {
-    tipo: '',
-    destino: '',
-    observaciones: '',
-    items: [{ trabajadorId: '', cantidad: 0, pagado: false }]
-  }
-}
-
-const agregarItemSalida = () => {
-  formSalida.value.items.push({ trabajadorId: '', cantidad: 0, pagado: false })
-}
-
-const eliminarItemSalida = (index: number) => {
-  formSalida.value.items.splice(index, 1)
-}
-
-const calcularTotalSalida = (): number => {
-  return formSalida.value.items.reduce((sum, item) => sum + (item.cantidad || 0), 0)
-}
-
-const validarFormSalida = (): boolean => {
-  if (!formSalida.value.tipo || !formSalida.value.destino || !relacionSalida.value) return false
-  if (formSalida.value.items.length === 0) return false
-  if (formSalida.value.items.some(i => !i.trabajadorId || i.cantidad <= 0)) return false
-  if (calcularTotalSalida() > relacionSalida.value.stock) return false
-  return true
-}
-
-const salidaHandler = async () => {
-  if (!relacionSalida.value || !validarFormSalida()) {
-    alert('Por favor complete todos los campos y verifique el stock')
-    return
-  }
-
-  isGuardando.value = true
-  try {
-    await SalidaService.create({
-      tipo: formSalida.value.tipo as TipoSalida,
-      destino: formSalida.value.destino as DestinoSalida,
-      fincaProductoId: relacionSalida.value.id,
-      observaciones: formSalida.value.observaciones,
-      items: formSalida.value.items
-    })
-    cerrarModalSalida()
-    cargarRelaciones()
-  } catch (error: any) {
-    console.error('Error al registrar salida:', error)
-    alert(error.response?.data?.message || 'Error al registrar salida')
-  } finally {
-    isGuardando.value = false
-  }
-}
-
-// Exportar
-const exportarRelaciones = async () => {
-  alert(`Exportando ${seleccionados.value.length} relaciones...`)
-  // Implementación pendiente
 }
 
 // Utilidades
-const getStockClass = (stock: number): string => {
-  if (stock === 0) return 'stock-cero'
-  if (stock <= 5) return 'stock-bajo'
-  if (stock <= 15) return 'stock-medio'
+const getStockClass = (relacion: FincaProducto): string => {
+  // Usar estadoStock del backend si está disponible
+  if (relacion.estadoStock) {
+    switch (relacion.estadoStock) {
+      case 'CRITICO': return 'stock-cero'
+      case 'BAJO': return 'stock-bajo'
+      case 'NORMAL': return 'stock-alto'
+      case 'EXCESO': return 'stock-exceso'
+    }
+  }
+  // Fallback a lógica basada en stockMinimo
+  if (relacion.stock === 0) return 'stock-cero'
+  if (relacion.stockMinimo && relacion.stock < relacion.stockMinimo) return 'stock-bajo'
+  if (relacion.stockMaximo && relacion.stock > relacion.stockMaximo) return 'stock-exceso'
   return 'stock-alto'
+}
+
+const getEstadoLabel = (relacion: FincaProducto): string => {
+  if (relacion.estadoStock) {
+    switch (relacion.estadoStock) {
+      case 'CRITICO': return 'Crítico'
+      case 'BAJO': return 'Bajo'
+      case 'NORMAL': return 'Normal'
+      case 'EXCESO': return 'Exceso'
+    }
+  }
+  return ''
 }
 
 // Lifecycle
 onMounted(() => {
   cargarFincas()
   cargarProductos()
-  cargarTrabajadores()
   cargarRelaciones()
 })
 
@@ -1030,6 +744,19 @@ h2 {
   color: #2e7d32;
 }
 
+.stock-exceso {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.estado-label {
+  display: block;
+  font-size: 0.7em;
+  font-weight: 500;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
 .acciones {
   display: flex;
   gap: 5px;
@@ -1072,6 +799,16 @@ h2 {
 
 .btn-editar:hover {
   background-color: #2980b9;
+  transform: translateY(-2px);
+}
+
+.btn-ajuste {
+  background-color: #8e44ad;
+  color: white;
+}
+
+.btn-ajuste:hover {
+  background-color: #71368a;
   transform: translateY(-2px);
 }
 
@@ -1199,6 +936,29 @@ h2 {
 
 .modal-asignar {
   max-width: 500px;
+}
+
+.modal-ajuste {
+  max-width: 520px;
+}
+
+.ajuste-resumen {
+  margin: 0 0 20px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f3e8f8;
+  color: #5b2c6f;
+  line-height: 1.5;
+}
+
+.field-help {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.8em;
+}
+
+.error-text {
+  color: #c0392b;
 }
 
 .modal-small {
@@ -1392,6 +1152,19 @@ h2 {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.tipo-documento-readonly {
+  background-color: #f5f5f5;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.hint {
+  display: block;
+  font-size: 0.75em;
+  color: #888;
+  margin-top: 4px;
 }
 
 .form-actions {

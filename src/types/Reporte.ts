@@ -2,6 +2,14 @@
 
 export interface Reporte {
   id?: string
+  tipoReporteId?: string
+  tipoReporteNombre?: string
+  tipoReporteCentroCosto?: string
+  tipoCultivoId?: string
+  tipoCultivoNombre?: string
+  tipoCultivoRequiereCampo?: boolean
+  tipoAnimalId?: string
+  tipoAnimalNombre?: string
   bloque: string
   campo: string
   area: string
@@ -15,6 +23,9 @@ export interface Reporte {
 }
 
 export interface ReporteRequest {
+  tipoReporteId?: string
+  tipoCultivoId?: string
+  tipoAnimalId?: string
   bloque: string
   campo: string
   area: string
@@ -28,6 +39,14 @@ export interface ReporteRequest {
 
 export interface ReporteResponse {
   id: string
+  tipoReporteId?: string
+  tipoReporteNombre?: string
+  tipoReporteCentroCosto?: string
+  tipoCultivoId?: string
+  tipoCultivoNombre?: string
+  tipoCultivoRequiereCampo?: boolean
+  tipoAnimalId?: string
+  tipoAnimalNombre?: string
   bloque: string
   campo: string
   area: string

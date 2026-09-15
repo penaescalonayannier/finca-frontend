@@ -17,16 +17,9 @@ interface TrabajadorHorasExcedidasListResponse {
   items: TrabajadorExcedido[]
 }
 
-const api = axios.create({
-  baseURL: '/api',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
 const TrabajadoresExcedidosService = {
   obtenerTrabajadoresConHorasExcedidas(year: string, mes: string) {
-    return api.get<TrabajadorHorasExcedidasListResponse>('/reporte/consolidado/trabajadores-excedidos', {
+    return axios.get<TrabajadorHorasExcedidasListResponse>('/api/reporte/consolidado/trabajadores-excedidos', {
       params: {
         year,
         mes

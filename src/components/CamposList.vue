@@ -1,6 +1,6 @@
 <template>
   <div class="campos-list">
-    <h2>Gestion de Campos</h2>
+    <h2>Gestion de Campos (Plantaciones)</h2>
 
     <div class="search-bar">
       <input
@@ -11,44 +11,64 @@
       />
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
       <button @click="mostrarModalCrear = true" class="btn-crear">Nuevo Campo</button>
+      <button @click="mostrarModalDepreciacion = true" class="btn-depreciar">Aplicar Depreciación</button>
     </div>
 
     <div v-if="isLoading" class="loading">Cargando campos...</div>
 
-    <table v-else class="campos-table">
-      <thead>
-        <tr>
-          <th>Bloque</th>
-          <th>Campo</th>
-          <th>Area</th>
-          <th>Variedad</th>
-          <th>Cepa</th>
-          <th>Poblacion</th>
-          <th>Destino</th>
-          <th>Rendimiento</th>
-          <th>Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="campos.length === 0">
-          <td colspan="9" class="no-data">No se encontraron registros</td>
-        </tr>
-        <tr v-for="campo in campos" :key="campo.id">
-          <td>{{ campo.bloque }}</td>
-          <td>{{ campo.campo }}</td>
-          <td class="numero">{{ formatNumber(campo.area) }}</td>
-          <td>{{ campo.variedad }}</td>
-          <td>{{ campo.cepa }}</td>
-          <td class="numero">{{ formatNumber(campo.poblacion) }}</td>
-          <td>{{ campo.destino }}</td>
-          <td class="numero">{{ formatNumber(campo.rendimiento) }}</td>
-          <td class="acciones">
-            <button @click="editarCampos(campo)" class="btn-editar">Editar</button>
-            <button @click="confirmarEliminar(campo)" class="btn-eliminar">Eliminar</button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-else class="table-container">
+      <table class="campos-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" v-model="seleccionarTodos" @change="toggleSeleccionTodos" /></th>
+            <th>Bloque</th>
+            <th>Campo</th>
+            <th>Area</th>
+            <th>Variedad</th>
+            <th>Cepa</th>
+            <th>Años Cepa</th>
+            <th>Valor Adq.</th>
+            <th>Dep. Acum.</th>
+            <th>Valor Actual</th>
+            <th>Tasa %</th>
+            <th>Últ. Dep.</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="campos.length === 0">
+            <td colspan="13" class="no-data">No se encontraron registros</td>
+          </tr>
+          <tr v-for="campo in campos" :key="campo.id" :class="{ 'seleccionado': camposSeleccionados.includes(campo.id!) }">
+            <td><input type="checkbox" :value="campo.id" v-model="camposSeleccionados" /></td>
+            <td>{{ getBloqueNombre(campo) }}</td>
+            <td>{{ campo.campo }}</td>
+            <td class="numero">{{ formatNumber(campo.area) }}</td>
+            <td>{{ getVariedadNombre(campo) }}</td>
+            <td>{{ getCepaNombre(campo) }}</td>
+            <td class="numero">{{ campo.anosCepa ?? '-' }}</td>
+            <td class="numero">{{ formatCurrency(campo.valorAdquisicion) }}</td>
+            <td class="numero">{{ formatCurrency(campo.depreciacionAcumulada) }}</td>
+            <td class="numero valor-actual">{{ formatCurrency(campo.valorActual) }}</td>
+            <td class="numero">{{ campo.tasaDepreciacionAnual ? campo.tasaDepreciacionAnual + '%' : '-' }}</td>
+            <td>{{ formatDate(campo.fechaUltimaDepreciacion) }}</td>
+            <td class="acciones">
+              <button @click="editarCampos(campo)" class="btn-editar">Editar</button>
+              <button @click="confirmarEliminar(campo)" class="btn-eliminar">Eliminar</button>
+            </td>
+          </tr>
+        </tbody>
+        <tfoot v-if="campos.length > 0">
+          <tr class="totales">
+            <td colspan="7"><strong>TOTALES</strong></td>
+            <td class="numero"><strong>{{ formatCurrency(totalValorAdquisicion) }}</strong></td>
+            <td class="numero"><strong>{{ formatCurrency(totalDepreciacionAcumulada) }}</strong></td>
+            <td class="numero valor-actual"><strong>{{ formatCurrency(totalValorActual) }}</strong></td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
 
     <div v-if="!isLoading && campos.length > 0" class="pagination">
       <div class="pagination-info">
@@ -95,11 +115,44 @@
       </div>
     </div>
 
+    <!-- Modal Depreciación -->
+    <div v-if="mostrarModalDepreciacion" class="modal">
+      <div class="modal-content modal-small">
+        <span class="close" @click="mostrarModalDepreciacion = false">&times;</span>
+        <h3>Aplicar Depreciación</h3>
+        <p class="info-text">
+          Se aplicará depreciación a {{ camposSeleccionados.length > 0 ? camposSeleccionados.length : 'todos los' }} campos
+          {{ camposSeleccionados.length === 0 ? 'con tasa de depreciación configurada' : 'seleccionados' }}.
+        </p>
+        <div class="form-group">
+          <label for="meses">Meses a depreciar:</label>
+          <input
+            id="meses"
+            v-model.number="mesesDepreciacion"
+            type="number"
+            min="1"
+            max="12"
+            class="input-meses"
+          />
+        </div>
+        <div class="formula-info">
+          <strong>Fórmula:</strong><br>
+          Dep. Mensual = (Valor Adq. - Valor Residual) × (Tasa% / 12 / 100)
+        </div>
+        <div class="modal-buttons">
+          <button @click="aplicarDepreciacion" class="btn-guardar" :disabled="isDepreciando">
+            {{ isDepreciando ? 'Aplicando...' : 'Aplicar' }}
+          </button>
+          <button @click="mostrarModalDepreciacion = false" class="btn-cancelar">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import CamposService from '@/services/CamposService'
 import CrearCampos from './CrearCampos.vue'
 import { notify } from '@/composables/useNotification'
@@ -116,9 +169,26 @@ const isLoading = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
+const mostrarModalDepreciacion = ref(false)
 const camposEditando = ref<Campos | null>(null)
+const camposSeleccionados = ref<string[]>([])
+const seleccionarTodos = ref(false)
+const mesesDepreciacion = ref(1)
+const isDepreciando = ref(false)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
+
+const totalValorAdquisicion = computed(() =>
+  campos.value.reduce((sum, c) => sum + (c.valorAdquisicion || 0), 0)
+)
+
+const totalDepreciacionAcumulada = computed(() =>
+  campos.value.reduce((sum, c) => sum + (c.depreciacionAcumulada || 0), 0)
+)
+
+const totalValorActual = computed(() =>
+  campos.value.reduce((sum, c) => sum + (c.valorActual || 0), 0)
+)
 
 const formatNumber = (value: number | null | undefined) => {
   if (value === null || value === undefined) return '-'
@@ -126,6 +196,82 @@ const formatNumber = (value: number | null | undefined) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+const formatCurrency = (value: number | null | undefined) => {
+  if (value === null || value === undefined) return '-'
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'CUP',
+    minimumFractionDigits: 2,
+  }).format(value)
+}
+
+const formatDate = (value: string | null | undefined) => {
+  if (!value) return '-'
+  return new Date(value).toLocaleDateString('es-CO')
+}
+
+const getBloqueNombre = (campo: Campos) => {
+  if (campo.bloque && typeof campo.bloque === 'object') {
+    return campo.bloque.name || campo.bloque.code || '-'
+  }
+  return campo.bloque || '-'
+}
+
+const getVariedadNombre = (campo: Campos) => {
+  if (campo.variedad && typeof campo.variedad === 'object') {
+    return campo.variedad.name || campo.variedad.code || '-'
+  }
+  return campo.variedad || '-'
+}
+
+const getCepaNombre = (campo: Campos) => {
+  if (campo.cepa && typeof campo.cepa === 'object') {
+    return campo.cepa.name || campo.cepa.code || '-'
+  }
+  return campo.cepa || '-'
+}
+
+const toggleSeleccionTodos = () => {
+  if (seleccionarTodos.value) {
+    camposSeleccionados.value = campos.value.filter(c => c.id).map(c => c.id!)
+  } else {
+    camposSeleccionados.value = []
+  }
+}
+
+watch(camposSeleccionados, (newVal) => {
+  seleccionarTodos.value = newVal.length === campos.value.length && campos.value.length > 0
+})
+
+const aplicarDepreciacion = async () => {
+  isDepreciando.value = true
+  try {
+    const idsParaDepreciar = camposSeleccionados.value.length > 0
+      ? camposSeleccionados.value
+      : campos.value.filter(c => c.id && c.tasaDepreciacionAnual).map(c => c.id!)
+
+    if (idsParaDepreciar.length === 0) {
+      notify.warning('Sin campos', 'No hay campos con tasa de depreciación configurada')
+      return
+    }
+
+    const response = await CamposService.calcularDepreciacion({
+      campoIds: idsParaDepreciar,
+      meses: mesesDepreciacion.value
+    })
+
+    notify.success('Depreciación aplicada', `Se actualizaron ${response.data.camposActualizados} campos`)
+    mostrarModalDepreciacion.value = false
+    camposSeleccionados.value = []
+    cargarCampos()
+  } catch (error) {
+    console.error('Error al aplicar depreciación:', error)
+    notify.error('Error', 'No se pudo aplicar la depreciación')
+  } finally {
+    isDepreciando.value = false
+  }
 }
 
 const cargarCampos = async () => {
@@ -137,13 +283,13 @@ const cargarCampos = async () => {
     // Agregar filtros de búsqueda por texto
     if (searchQuery.value.trim()) {
       filters.push({
-        key: 'nombre',
+        key: 'campo',
         operator: 'CONTAINS',
         value: searchQuery.value.trim(),
         logicalOperation: 'OR'
       })
       filters.push({
-        key: 'codigo',
+        key: 'destino',
         operator: 'CONTAINS',
         value: searchQuery.value.trim(),
         logicalOperation: 'OR'
@@ -259,8 +405,9 @@ h2 {
 
 .btn-buscar { background-color: #3498db; color: white; }
 .btn-crear { background-color: #27ae60; color: white; }
+.btn-depreciar { background-color: #9b59b6; color: white; }
 
-.btn-buscar, .btn-crear {
+.btn-buscar, .btn-crear, .btn-depreciar {
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
@@ -270,25 +417,69 @@ h2 {
 
 .btn-buscar:hover { background-color: #2980b9; }
 .btn-crear:hover { background-color: #219a52; }
+.btn-depreciar:hover { background-color: #8e44ad; }
 
 .loading, .no-data { text-align: center; padding: 40px; color: #888; }
+
+.table-container {
+  overflow-x: auto;
+}
 
 .campos-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: 0.85em;
+  min-width: 1200px;
 }
 
 .campos-table th, .campos-table td {
   border: 1px solid #eee;
-  padding: 10px;
+  padding: 8px;
   text-align: left;
+  white-space: nowrap;
 }
 
-.campos-table th { background-color: #f5f5f5; font-weight: 600; }
+.campos-table th {
+  background-color: #34495e;
+  color: white;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+
 .campos-table tr:nth-child(even) { background-color: #fafafa; }
+.campos-table tr:hover { background-color: #ecf0f1; }
+.campos-table tr.seleccionado { background-color: #e8f4fd; }
+
+.campos-table tfoot tr.totales {
+  background-color: #f5f5f5;
+  font-weight: bold;
+}
 
 .numero { text-align: right; }
+.valor-actual { color: #27ae60; font-weight: 600; }
+
+.info-text {
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.formula-info {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.input-meses {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1em;
+}
 
 .acciones button {
   padding: 5px 10px;

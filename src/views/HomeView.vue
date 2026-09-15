@@ -218,6 +218,48 @@
 </router-link>
         </div>
       </div>
+
+      <!-- Activos Fijos Tangibles -->
+      <div class="menu-section">
+        <h2 class="section-title">🏭 Activos Fijos Tangibles</h2>
+        <div class="section-grid">
+          <router-link to="/activos-fijos" class="menu-card card-blue-dark">
+            <div class="card-icon">🏗️</div>
+            <div class="card-content">
+              <h3>Activos Fijos</h3>
+              <p>Edificios, maquinarias, equipos y mobiliario</p>
+              <span class="card-badge">NCC No. 7</span>
+            </div>
+          </router-link>
+
+          <router-link to="/activos-animales" class="menu-card card-green-dark">
+            <div class="card-icon">🐄</div>
+            <div class="card-content">
+              <h3>Activos Animales</h3>
+              <p>Ganado bovino, porcino, equino y otros</p>
+              <span class="card-badge">Grupo 08</span>
+            </div>
+          </router-link>
+
+          <router-link to="/plantaciones" class="menu-card card-teal">
+            <div class="card-icon">🌱</div>
+            <div class="card-content">
+              <h3>Plantaciones</h3>
+              <p>Caña de azúcar, frutales y cultivos permanentes</p>
+              <span class="card-badge">Grupos 12-13</span>
+            </div>
+          </router-link>
+
+          <router-link to="/depreciacion" class="menu-card card-orange">
+            <div class="card-icon">📉</div>
+            <div class="card-content">
+              <h3>Depreciación</h3>
+              <p>Cálculo y cierre mensual de depreciación</p>
+              <span class="card-badge">Res. 51/2021</span>
+            </div>
+          </router-link>
+        </div>
+      </div>
     </div>
 
     <!-- Footer -->
@@ -529,6 +571,10 @@ onMounted(() => {
 .card-green-dark::before { background: #2e7d32; }
 .card-green-dark:hover { border-color: #2e7d32; }
 .card-green-dark .card-badge { background: #e8f5e9; color: #1b5e20; }
+
+.card-blue-dark::before { background: #1565c0; }
+.card-blue-dark:hover { border-color: #1565c0; }
+.card-blue-dark .card-badge { background: #e3f2fd; color: #0d47a1; }
 
 .card-purple::before { background: #9b59b6; }
 .card-purple:hover { border-color: #9b59b6; }

@@ -1,7 +1,9 @@
 // src/router/index.ts
 
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import AuthService from '@/services/AuthService'
 import HomeView from '@/views/HomeView.vue'
+import LoginView from '@/views/LoginView.vue'
 import EstadoCuentaList from '@/components/EstadoCuentaList.vue'
 import UploadXmlView from '@/components/UploadXmlView.vue'
 import ProcesarXmlView from '@/components/ProcesarXmlView.vue'
@@ -14,6 +16,7 @@ import EntradaProduccion from '@/components/EntradaProduccion.vue'
 import PrestamoList from '@/components/PrestamoList.vue'
 import TomaPrestamoList from '@/components/TomaPrestamoList.vue'
 import CamposList from '@/components/CamposList.vue'
+import TipoCultivoList from '@/components/TipoCultivoList.vue'
 import ReporteList from '@/components/ReporteList.vue'
 import TrabajadorReporteList from '@/components/TrabajadorReporteList.vue'
 import ReporteConsolidado from '@/components/ReporteConsolidado.vue'
@@ -34,8 +37,47 @@ import DeudaTrabajadorList from '@/components/DeudaTrabajadorList.vue'
 import HistorialMovimientos from '@/components/HistorialMovimientos.vue'
 import HistorialStock from '@/components/HistorialStock.vue'
 import AlmacenList from '@/components/AlmacenList.vue'
+import DetalleAlmacenView from '@/views/DetalleAlmacenView.vue'
+import ReportesConsolidadosView from '@/components/ReportesView.vue'
+import ReporteDeudasPendientes from '@/components/ReporteDeudasPendientes.vue'
+import ReporteFacturacion from '@/components/ReporteFacturacion.vue'
+import AlertasStockView from '@/components/AlertasStockView.vue'
+import ReporteKardex from '@/components/ReporteKardex.vue'
+import ReporteMovimientosGrafico from '@/components/ReporteMovimientosGrafico.vue'
+import ResumenVentasPagosView from '@/views/ResumenVentasPagosView.vue'
+import UsuarioList from '@/components/UsuarioList.vue'
+import AuditoriaList from '@/components/AuditoriaList.vue'
+import ConfiguracionEmpresaForm from '@/components/ConfiguracionEmpresaForm.vue'
+import ActivoFijoList from '@/components/ActivoFijoList.vue'
+import ActivoAnimalList from '@/components/ActivoAnimalList.vue'
+import PlantacionList from '@/components/PlantacionList.vue'
+import DepreciacionView from '@/components/DepreciacionView.vue'
+import GrupoActivoFijoList from '@/components/GrupoActivoFijoList.vue'
+import ReporteConsolidadoMovimientos from '@/views/ReporteConsolidadoMovimientos.vue'
+import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
+import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
+import EditarTipoReporte from '@/components/EditarTipoReporte.vue'
+import ListaTipoAnimales from '@/components/ListaTipoAnimales.vue'
+import CrearTipoAnimal from '@/components/CrearTipoAnimal.vue'
+import EditarTipoAnimal from '@/components/EditarTipoAnimal.vue'
+import CentroCostoList from '@/components/CentroCostoList.vue'
+import CrearCentroCosto from '@/components/CrearCentroCosto.vue'
+import EditarCentroCosto from '@/components/EditarCentroCosto.vue'
+
+// Contabilidad views
+import LibroDiario from '@/views/contabilidad/LibroDiario.vue'
+import MayorPorCuenta from '@/views/contabilidad/MayorPorCuenta.vue'
+import BalanceComprobacion from '@/views/contabilidad/BalanceComprobacion.vue'
+import ReglasContabilizacion from '@/views/contabilidad/ReglasContabilizacion.vue'
+import PlanCuentas from '@/views/contabilidad/PlanCuentas.vue'
 
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: LoginView,
+    meta: { public: true }
+  },
   {
     path: '/',
     name: 'Home',
@@ -100,6 +142,11 @@ const routes: RouteRecordRaw[] = [
     path: '/campos',
     name: 'Campos',
     component: CamposList
+  },
+  {
+    path: '/tipos-cultivo',
+    name: 'TiposCultivo',
+    component: TipoCultivoList
   },
   {
     path: '/reportes',
@@ -215,12 +262,189 @@ const routes: RouteRecordRaw[] = [
     path: '/almacenes',
     name: 'Almacenes',
     component: AlmacenList
+  },
+  {
+    path: '/almacenes/:id',
+    name: 'DetalleAlmacen',
+    component: DetalleAlmacenView
+  },
+  {
+    path: '/reportes-consolidados',
+    name: 'ReportesConsolidados',
+    component: ReportesConsolidadosView
+  },
+  {
+    path: '/reportes/deudas',
+    name: 'ReporteDeudas',
+    component: ReporteDeudasPendientes
+  },
+  {
+    path: '/reportes/facturacion',
+    name: 'ReporteFacturacionView',
+    component: ReporteFacturacion
+  },
+  {
+    path: '/alertas-stock',
+    name: 'AlertasStock',
+    component: AlertasStockView
+  },
+  {
+    path: '/reportes/kardex',
+    name: 'ReporteKardex',
+    component: ReporteKardex
+  },
+  {
+    path: '/reportes/movimientos',
+    name: 'ReporteMovimientos',
+    component: ReporteMovimientosGrafico
+  },
+  {
+    path: '/reportes/ventas-pagos',
+    name: 'ResumenVentasPagos',
+    component: ResumenVentasPagosView
+  },
+  {
+    path: '/usuarios',
+    name: 'Usuarios',
+    component: UsuarioList,
+    meta: { requiresAdmin: true }
+  },
+  {
+    path: '/auditoria',
+    name: 'Auditoria',
+    component: AuditoriaList,
+    meta: { requiresAdmin: true }
+  },
+  {
+    path: '/configuracion-empresa',
+    name: 'ConfiguracionEmpresa',
+    component: ConfiguracionEmpresaForm,
+    meta: { requiresAdmin: true }
+  },
+  // Activos Fijos Tangibles (AFT)
+  {
+    path: '/grupos-activos-fijos',
+    name: 'GruposActivosFijos',
+    component: GrupoActivoFijoList
+  },
+  {
+    path: '/activos-fijos',
+    name: 'ActivosFijos',
+    component: ActivoFijoList
+  },
+  {
+    path: '/activos-animales',
+    name: 'ActivosAnimales',
+    component: ActivoAnimalList
+  },
+  {
+    path: '/plantaciones',
+    name: 'Plantaciones',
+    component: PlantacionList
+  },
+  {
+    path: '/depreciacion',
+    name: 'Depreciacion',
+    component: DepreciacionView
+  },
+  {
+    path: '/reportes/consolidado-movimientos',
+    name: 'ReporteConsolidadoMovimientos',
+    component: ReporteConsolidadoMovimientos
+  },
+  // Tipos de Reporte (nomenclador)
+  {
+    path: '/lista-tipo-reportes',
+    name: 'ListaTipoReportes',
+    component: ListaTipoReportes
+  },
+  {
+    path: '/crear-tipo-reporte',
+    name: 'CrearTipoReporte',
+    component: CrearTipoReporte
+  },
+  {
+    path: '/editar-tipo-reporte/:id',
+    name: 'EditarTipoReporte',
+    component: EditarTipoReporte
+  },
+  // Tipos de Animal (nomenclador para Vaquería)
+  {
+    path: '/lista-tipo-animales',
+    name: 'ListaTipoAnimales',
+    component: ListaTipoAnimales
+  },
+  {
+    path: '/crear-tipo-animal',
+    name: 'CrearTipoAnimal',
+    component: CrearTipoAnimal
+  },
+  {
+    path: '/editar-tipo-animal/:id',
+    name: 'EditarTipoAnimal',
+    component: EditarTipoAnimal
+  },
+  // Centros de Costo (Contabilidad)
+  {
+    path: '/centros-costo',
+    name: 'CentrosCosto',
+    component: CentroCostoList
+  },
+  {
+    path: '/crear-centro-costo',
+    name: 'CrearCentroCosto',
+    component: CrearCentroCosto
+  },
+  {
+    path: '/editar-centro-costo/:id',
+    name: 'EditarCentroCosto',
+    component: EditarCentroCosto
+  },
+  // Contabilidad
+  {
+    path: '/contabilidad/libro-diario',
+    name: 'LibroDiario',
+    component: LibroDiario
+  },
+  {
+    path: '/contabilidad/mayor-por-cuenta',
+    name: 'MayorPorCuenta',
+    component: MayorPorCuenta
+  },
+  {
+    path: '/contabilidad/balance-comprobacion',
+    name: 'BalanceComprobacion',
+    component: BalanceComprobacion
+  },
+  {
+    path: '/contabilidad/reglas',
+    name: 'ReglasContabilizacion',
+    component: ReglasContabilizacion
+  },
+  {
+    path: '/contabilidad/plan-cuentas',
+    name: 'PlanCuentas',
+    component: PlanCuentas
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
   routes
+})
+
+// Navigation guard
+router.beforeEach((to, _from, next) => {
+  const isPublic = to.meta.public === true
+  const isAuthenticated = AuthService.isAuthenticated()
+
+  if (!isPublic && !isAuthenticated) {
+    next('/login')
+  } else if (to.path === '/login' && isAuthenticated) {
+    next('/')
+  } else {
+    next()
+  }
 })
 
 export default router

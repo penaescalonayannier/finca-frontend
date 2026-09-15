@@ -106,25 +106,14 @@
       </div>
     </div>
 
-    <!-- Modal Detalle -->
-    <div v-if="mostrarModalDetalle" class="modal">
-      <div class="modal-content modal-detalle">
-        <DetalleAlmacen
-          :almacen-id="almacenDetalleId!"
-          @close="mostrarModalDetalle = false"
-          @edit="editarDesdeDetalle"
-        />
       </div>
-    </div>
-
-  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import AlmacenService from '@/services/AlmacenService'
 import CrearAlmacen from './CrearAlmacen.vue'
-import DetalleAlmacen from './DetalleAlmacen.vue'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Almacen } from '@/types/Almacen'
@@ -137,11 +126,11 @@ const tamanoPagina = ref(10)
 const totalElementos = ref(0)
 const isLoading = ref(false)
 
+const router = useRouter()
+
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
-const mostrarModalDetalle = ref(false)
 const almacenEditando = ref<Almacen | null>(null)
-const almacenDetalleId = ref<string | null>(null)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
@@ -215,15 +204,8 @@ const cambiarTamanoPagina = () => {
 
 const verAlmacen = (almacen: Almacen) => {
   if (almacen.id) {
-    almacenDetalleId.value = almacen.id
-    mostrarModalDetalle.value = true
+    router.push(`/almacenes/${almacen.id}`)
   }
-}
-
-const editarDesdeDetalle = (almacen: Almacen) => {
-  almacenEditando.value = { ...almacen }
-  mostrarModalDetalle.value = false
-  mostrarModalEditar.value = true
 }
 
 const editarAlmacen = (almacen: Almacen) => {
@@ -537,12 +519,6 @@ h2 {
   to { transform: translateY(0); opacity: 1; }
 }
 
-.modal-detalle {
-  max-width: 800px;
-  padding: 0;
-  border-radius: 16px;
-  overflow: hidden;
-}
 
 .close {
   position: absolute;
@@ -610,9 +586,5 @@ h2 {
     padding: 20px;
   }
 
-  .modal-detalle {
-    max-width: 95%;
-    margin: 10px;
   }
-}
 </style>

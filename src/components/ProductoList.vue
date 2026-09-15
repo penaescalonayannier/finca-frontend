@@ -21,6 +21,7 @@
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
       <button @click="mostrarModalCrear = true" class="btn-crear">Nuevo Producto</button>
       <button @click="mostrarModalImportar = true" class="btn-importar">Importar Excel</button>
+      <button @click="exportarPdf" class="btn-pdf" :disabled="productos.length === 0">📄 Exportar PDF</button>
       <button v-if="productosSeleccionados.length > 0" @click="exportarProductos" class="btn-exportar">
         Exportar ({{ productosSeleccionados.length }})
       </button>
@@ -214,6 +215,8 @@ import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Producto } from '@/types/Producto'
 import type { SearchFilter } from '@/types/EstadoCuenta'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const productos = ref<Producto[]>([])
 const searchQuery = ref('')
@@ -516,6 +519,89 @@ const exportarProductos = async () => {
   }
 }
 
+const exportarPdf = () => {
+  if (productos.value.length === 0) {
+    notify.warning('Sin datos', 'No hay productos para exportar')
+    return
+  }
+
+  const doc = new jsPDF()
+  const fechaActual = new Date().toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  })
+
+  // Header
+  doc.setFillColor(52, 152, 219)
+  doc.rect(0, 0, 210, 35, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(20)
+  doc.setFont('helvetica', 'bold')
+  doc.text('LISTADO DE PRODUCTOS', 105, 18, { align: 'center' })
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Fecha: ${fechaActual}`, 105, 28, { align: 'center' })
+
+  // Reset colors
+  doc.setTextColor(0, 0, 0)
+
+  // Table data
+  const tableData = productos.value.map((p, index) => [
+    index + 1,
+    p.code || '',
+    p.name || '',
+    `$${(p.price || 0).toFixed(2)}`,
+    `$${(p.priceTrabajador || 0).toFixed(2)}`,
+    `$${(p.priceComedor || 0).toFixed(2)}`
+  ])
+
+  autoTable(doc, {
+    startY: 45,
+    head: [['#', 'Código', 'Nombre', 'Precio', 'Precio Trabajador', 'Precio Comedor']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [52, 152, 219],
+      textColor: 255,
+      fontStyle: 'bold',
+      halign: 'center'
+    },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { cellWidth: 25 },
+      2: { cellWidth: 60 },
+      3: { halign: 'right', cellWidth: 25 },
+      4: { halign: 'right', cellWidth: 30 },
+      5: { halign: 'right', cellWidth: 30 }
+    },
+    styles: {
+      fontSize: 9,
+      cellPadding: 3
+    },
+    alternateRowStyles: {
+      fillColor: [245, 247, 250]
+    }
+  })
+
+  // Footer
+  const pageCount = doc.getNumberOfPages()
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i)
+    doc.setFontSize(8)
+    doc.setTextColor(128, 128, 128)
+    doc.text(
+      `Página ${i} de ${pageCount} - Sistema Finca`,
+      105,
+      doc.internal.pageSize.height - 10,
+      { align: 'center' }
+    )
+  }
+
+  doc.save(`productos_${new Date().getTime()}.pdf`)
+  notify.success('PDF generado', 'El listado de productos se descargó correctamente')
+}
+
 const getStockClass = (stock: number): string => {
   if (stock === 0) return 'stock-cero'
   if (stock <= 5) return 'stock-bajo'
@@ -592,11 +678,11 @@ h2 {
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
 }
 
-.btn-buscar { background-color: #3498db; color: white; }
+.btn-buscar { background-color: var(--color-primary); color: white; }
 .btn-crear { background-color: #27ae60; color: white; }
-.btn-importar { background-color: #9b59b6; color: white; }
+.btn-importar { background-color: var(--color-primary); color: white; }
 
-.btn-buscar, .btn-crear, .btn-importar, .btn-exportar {
+.btn-buscar, .btn-crear, .btn-importar, .btn-exportar, .btn-pdf {
   padding: 10px 20px;
   border: none;
   border-radius: 8px;
@@ -606,8 +692,8 @@ h2 {
   font-size: 0.95em;
 }
 
-.btn-buscar:hover { 
-  background-color: #2980b9; 
+.btn-buscar:hover {
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
@@ -616,20 +702,36 @@ h2 {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
 }
-.btn-importar:hover { 
-  background-color: #8e44ad; 
+.btn-importar:hover {
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(155, 89, 182, 0.3);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
 
 .btn-exportar { 
   background-color: #e67e22; 
   color: white; 
 }
-.btn-exportar:hover { 
-  background-color: #d35400; 
+.btn-exportar:hover {
+  background-color: #d35400;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+}
+
+.btn-pdf {
+  background-color: var(--color-primary);
+  color: white;
+}
+.btn-pdf:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+.btn-pdf:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .loading, .no-data { text-align: center; padding: 40px; color: #888; }
@@ -756,23 +858,23 @@ h2 {
 }
 
 .btn-ver {
-  background-color: #1abc9c;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-ver:hover {
-  background-color: #16a085;
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(26, 188, 156, 0.3);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
 
 .btn-editar {
-  background-color: #3498db;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .btn-editar:hover {
-  background-color: #2980b9;
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
 }
@@ -966,8 +1068,8 @@ h2 {
 }
 
 .file-drop-zone:hover, .file-drop-zone.drag-over {
-  border-color: #9b59b6;
-  background-color: #f3e5f5;
+  border-color: var(--color-primary);
+  background-color: #e3f2fd;
 }
 
 .drop-icon { font-size: 2.5em; margin-bottom: 10px; }
@@ -975,7 +1077,7 @@ h2 {
 
 .btn-seleccionar {
   display: inline-block;
-  background-color: #9b59b6;
+  background-color: var(--color-primary);
   color: white;
   padding: 8px 20px;
   border-radius: 6px;
@@ -984,8 +1086,8 @@ h2 {
   transition: all 0.3s ease;
 }
 
-.btn-seleccionar:hover { 
-  background-color: #8e44ad;
+.btn-seleccionar:hover {
+  background-color: var(--color-primary-dark);
   transform: translateY(-2px);
 }
 

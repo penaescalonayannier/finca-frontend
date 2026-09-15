@@ -102,7 +102,7 @@ class TrabajadorReporteService {
       query: filtros.query || '',
       pageSize: filtros.size || 10,
       page: filtros.page || 0,
-      sortBy: filtros.sortBy || 'createdAt',
+      sortBy: filtros.sortBy || 'id',
       sortType: filtros.sortType || 'DES'
     }
 

@@ -2,6 +2,8 @@
 
 import type { TipoProducto } from './Producto'
 
+export type EstadoStock = 'CRITICO' | 'BAJO' | 'NORMAL' | 'EXCESO'
+
 export interface FincaProducto {
   id: string
   fincaId: string
@@ -13,6 +15,10 @@ export interface FincaProducto {
   productoPrice: number
   productoTipo: TipoProducto
   stock: number
+  stockMinimo: number
+  stockMaximo: number | null
+  estadoStock: EstadoStock
+  activo: boolean
 }
 
 export interface FincaProductoRequest {
@@ -25,6 +31,7 @@ export interface AsignarProductoRequest {
   fincaId: string
   productoId: string
   stock: number
+  stockMinimo?: number
 }
 
 export interface ActualizarStockRequest {
@@ -51,6 +58,7 @@ export interface EntradaProduccionRequest {
   productoId: string
   cantidad: number
   descripcion?: string
+  centroCosto?: string  // Código del centro de costo para contabilidad (ej: 700.01.04)
 }
 
 export interface EntradaProduccionResponse {

@@ -49,6 +49,13 @@
       <span>Cargando deudas...</span>
     </div>
 
+    <div v-else-if="errorMessage" class="error-state">
+      <div class="error-icon">⚠️</div>
+      <h3>Error</h3>
+      <p>{{ errorMessage }}</p>
+      <button @click="cargarDeudas" class="btn-primary">Reintentar</button>
+    </div>
+
     <div v-else-if="deudas.length === 0" class="empty-state">
       <div class="empty-icon">📋</div>
       <h3>No hay deudas registradas</h3>
@@ -314,6 +321,7 @@ const totalElementos = ref(0)
 const isLoading = ref(false)
 const loadingDetalles = ref(false)
 const expandedDeuda = ref<string | null>(null)
+const errorMessage = ref<string | null>(null)
 
 // Modal de pago
 const showModalPago = ref(false)
@@ -378,10 +386,10 @@ const getInitials = (name: string) => {
 const cargarDeudas = async () => {
   isLoading.value = true
   deudas.value = []
+  errorMessage.value = null
   try {
     const filters: SearchFilter[] = []
 
-    // Agregar filtros de búsqueda por texto (buscar por nombre del trabajador)
     if (searchQuery.value.trim()) {
       filters.push({
         key: 'trabajador.nombre',
@@ -413,8 +421,14 @@ const cargarDeudas = async () => {
       deudas.value = (data.data as DeudaTrabajador[]) || []
       totalElementos.value = (data.total as number) || deudas.value.length
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error al cargar deudas:', error)
+    const axiosError = error as { response?: { status?: number } }
+    if (axiosError.response?.status === 403 || axiosError.response?.status === 401) {
+      errorMessage.value = 'Sesión expirada o no autorizado. Por favor, inicie sesión nuevamente.'
+    } else {
+      errorMessage.value = 'Error al cargar las deudas. Intente nuevamente.'
+    }
   } finally {
     isLoading.value = false
   }
@@ -743,7 +757,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   border-radius: 16px;
   padding: 20px 30px;
   display: flex;
@@ -751,7 +765,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
   gap: 15px;
   color: white;
   min-width: 250px;
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 30px rgba(52, 152, 219, 0.3);
 }
 
 .stat-card.total {
@@ -818,7 +832,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
   border: none;
   padding: 12px 30px;
@@ -831,7 +845,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
 }
 
 .btn-pdf {
@@ -863,18 +877,39 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
   font-size: 1.1em;
 }
 
-/* Loading & Empty States */
-.loading-state, .empty-state {
+/* Loading & Empty & Error States */
+.loading-state, .empty-state, .error-state {
   text-align: center;
   padding: 60px 20px;
   color: #666;
+}
+
+.error-state {
+  background: #fff5f5;
+  border-radius: 16px;
+  border: 1px solid #fed7d7;
+}
+
+.error-state .error-icon {
+  font-size: 4em;
+  margin-bottom: 15px;
+}
+
+.error-state h3 {
+  color: #c53030;
+  margin: 0 0 10px 0;
+}
+
+.error-state p {
+  color: #742a2a;
+  margin-bottom: 20px;
 }
 
 .spinner {
   width: 50px;
   height: 50px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border-top: 4px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
@@ -941,7 +976,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
   width: 50px;
   height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -1006,7 +1041,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 
 .expand-icon {
   font-size: 0.8em;
-  color: #667eea;
+  color: var(--color-primary);
   transition: transform 0.3s;
 }
 
@@ -1041,7 +1076,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
   width: 30px;
   height: 30px;
   border: 3px solid #f3f3f3;
-  border-top: 3px solid #667eea;
+  border-top: 3px solid var(--color-primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 15px;
@@ -1379,9 +1414,9 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 }
 
 .btn-pag:hover:not(:disabled) {
-  background: #667eea;
+  background: var(--color-primary);
   color: white;
-  border-color: #667eea;
+  border-color: var(--color-primary);
 }
 
 .btn-pag:disabled {
@@ -1517,7 +1552,7 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
   width: 45px;
   height: 45px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -1564,8 +1599,8 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 
 .form-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
 }
 
 .error-text {
@@ -1592,13 +1627,13 @@ const descargarPdfHistorial = (deuda: DeudaTrabajador) => {
 }
 
 .radio-option:has(input:checked) {
-  border-color: #667eea;
+  border-color: var(--color-primary);
   background: #f8f9ff;
 }
 
 .radio-option input {
   margin-right: 10px;
-  accent-color: #667eea;
+  accent-color: var(--color-primary);
 }
 
 .radio-label {

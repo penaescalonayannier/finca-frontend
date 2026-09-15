@@ -72,7 +72,7 @@ class FincaProductoService {
       query: params.query || '',
       pageSize: params.size || 10,
       page: params.page || 0,
-      sortBy: params.sortBy || 'createdAt',
+      sortBy: params.sortBy || 'id',
       sortType: params.sortType || 'DES'
     }
 
@@ -87,7 +87,7 @@ class FincaProductoService {
    * Obtener todos los productos de una finca
    */
   obtenerProductosDeFinca(fincaId: string): Promise<AxiosResponse<FincaProductoResponse>> {
-    return axios.get(`${API_BASE_URL}/finca/${fincaId}`)
+    return axios.get(`${API_BASE_URL}/finca/${fincaId}/productos/activos`)
   }
 
   /**
