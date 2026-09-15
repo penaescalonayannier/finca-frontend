@@ -125,6 +125,23 @@ class SalidaService {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   }
+
+  async descargarValesIndividuales(fecha: string, salidaIds: string[]): Promise<void> {
+    const response = await axios.post(`${API_BASE_URL}/vales/individuales/pdf`, { fecha, salidaIds }, {
+      responseType: 'blob'
+    })
+    const disposition = response.headers['content-disposition']
+    const filename = disposition?.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)?.[1]?.replace(/['"]/g, '')
+      || `Vales_individuales_${fecha}.pdf`
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
 }
 
 export default new SalidaService()

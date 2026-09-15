@@ -109,7 +109,7 @@
         <span class="close" @click="cerrarModalConsolidado">&times;</span>
         <h3>Vales consolidados por destino</h3>
         <p class="consolidado-info">
-          Seleccione los vales activos de la fecha. El PDF será uno solo, con una sección independiente para cada destino. No modifica inventario ni contabilidad.
+          Seleccione los vales activos de la fecha. Puede generar un PDF agrupado por destino o un único PDF que mantenga cada vale en páginas independientes. No modifica inventario ni contabilidad.
         </p>
 
         <div class="form-group">
@@ -152,8 +152,11 @@
         </p>
         <div class="form-actions">
           <button class="btn-cancelar" @click="cerrarModalConsolidado" :disabled="generandoConsolidado">Cancelar</button>
+          <button class="btn-individuales" @click="generarPdfValesIndividuales" :disabled="!formConsolidado.fecha || valesSeleccionados.size === 0 || generandoConsolidado">
+            {{ generandoConsolidado ? 'Generando...' : 'PDF individuales' }}
+          </button>
           <button class="btn-guardar" @click="generarPdfConsolidado" :disabled="!formConsolidado.fecha || valesSeleccionados.size === 0 || generandoConsolidado">
-            {{ generandoConsolidado ? 'Generando...' : 'Descargar PDF' }}
+            {{ generandoConsolidado ? 'Generando...' : 'PDF por destino' }}
           </button>
         </div>
       </div>
@@ -413,6 +416,24 @@ const generarPdfConsolidado = async () => {
   }
 }
 
+const generarPdfValesIndividuales = async () => {
+  if (!formConsolidado.value.fecha || valesSeleccionados.value.size === 0) return
+  generandoConsolidado.value = true
+  try {
+    await SalidaService.descargarValesIndividuales(
+      formConsolidado.value.fecha,
+      Array.from(valesSeleccionados.value)
+    )
+    notify.success('PDF generado', 'Se descargó un único PDF con cada vale en páginas independientes')
+    cerrarModalConsolidado()
+  } catch (error) {
+    console.error('Error al generar vales individuales:', error)
+    notify.error('Error', 'No se pudo generar el PDF de vales individuales')
+  } finally {
+    generandoConsolidado.value = false
+  }
+}
+
 // Ver detalles
 const verDetalles = async (salida: Salida) => {
   try {
@@ -582,6 +603,16 @@ h2 {
 
 .btn-consolidado {
   background-color: #8e44ad;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-individuales {
+  background-color: #2874a6;
   color: white;
   padding: 10px 20px;
   border: none;
