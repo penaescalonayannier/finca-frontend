@@ -25,6 +25,11 @@ export interface Salida {
 export interface ItemSalida {
   id?: string
   salidaId?: string
+  fincaProductoId?: string
+  almacenFincaProductoId?: string
+  productoCode?: string
+  productoName?: string
+  unidadMedida?: string
   trabajadorId?: string // Optional for COMEDOR salidas
   trabajadorNombre?: string
   cantidad: number

@@ -1085,7 +1085,7 @@ const ejecutarSalidaMultiple = async () => {
       }))
     })
     const cantidadLineas = response.data.cantidadLineas || lineasSalidaMultipleSeleccionadas.value.length
-    notify.success('Salida múltiple registrada', `Se registraron ${cantidadLineas} salida(s) correctamente.`)
+    notify.success('Salida múltiple registrada', `Se generó un solo vale con ${cantidadLineas} producto(s).`)
     cerrarModalSalidaMultiple()
     await cargarAlmacen()
     if (mostrarAsientos.value) {
