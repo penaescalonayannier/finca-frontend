@@ -46,6 +46,30 @@
       </form>
     </section>
 
+    <section class="card historial-banco">
+      <div class="section-title">
+        <div><h3>Historial de entregas al banco</h3><p>Salidas de efectivo registradas desde caja para la finca seleccionada.</p></div>
+        <span class="pending-count">{{ entregasBanco.length }} depósito{{ entregasBanco.length === 1 ? '' : 's' }}</span>
+      </div>
+      <div v-if="!fincaId" class="empty">Seleccione una finca para consultar sus depósitos.</div>
+      <div v-else-if="!entregasBanco.length" class="empty">No hay entregas al banco registradas para esta finca.</div>
+      <div v-else class="table-wrap">
+        <table class="tabla-depositos">
+          <thead><tr><th>Fecha</th><th>Referencia bancaria</th><th>Importe</th><th>Entregado por</th><th>Recibido por</th><th>Observaciones</th></tr></thead>
+          <tbody>
+            <tr v-for="deposito in entregasBanco" :key="deposito.id">
+              <td>{{ fecha(deposito.fecha) }}</td>
+              <td class="numero-documento">{{ deposito.referenciaBancaria || '—' }}</td>
+              <td class="money">{{ moneda(deposito.importe) }}</td>
+              <td>{{ deposito.entregadoPor || '—' }}</td>
+              <td>{{ deposito.recibidoPor || '—' }}</td>
+              <td>{{ deposito.observaciones || '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="card">
       <div class="section-title">
         <div><h3>Renglones pendientes de liquidación</h3><p>Seleccione únicamente los productos o cargos que se cobraron. Los renglones saldados desaparecen después de registrar la liquidación.</p></div>
@@ -83,7 +107,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { notify } from '@/composables/useNotification'
-import LiquidacionCajaService, { type EntregaBancoRequest, type ItemSalidaPendiente, type LiquidarSalidaRequest } from '@/services/LiquidacionCajaService'
+import LiquidacionCajaService, { type EntregaBancoHistorial, type EntregaBancoRequest, type ItemSalidaPendiente, type LiquidarSalidaRequest } from '@/services/LiquidacionCajaService'
 import FincaService from '@/services/FincaService'
 
 interface Distribucion { efectivo: number; transferencia: number; referenciaBancaria: string }
@@ -104,6 +128,7 @@ interface LineaSeleccionada {
 }
 
 const pendientes = ref<ItemPendienteLiquidacion[]>([])
+const entregasBanco = ref<EntregaBancoHistorial[]>([])
 const saldoCaja = ref(0)
 const fincaId = ref('')
 const hoy = new Date()
@@ -184,17 +209,23 @@ const fecha = (valor: string) => valor ? new Date(valor).toLocaleDateString('es-
 async function cargarDatos() {
   if (!fincaId.value) {
     pendientes.value = []
+    entregasBanco.value = []
     saldoCaja.value = 0
     return
   }
   cargando.value = true
   try {
-    const [pendientesResponse, saldoResponse] = await Promise.all([LiquidacionCajaService.pendientes(fincaId.value, fechaInicio.value, fechaFin.value), LiquidacionCajaService.obtenerSaldoCaja(fincaId.value)])
+    const [pendientesResponse, saldoResponse, entregasResponse] = await Promise.all([
+      LiquidacionCajaService.pendientes(fincaId.value, fechaInicio.value, fechaFin.value),
+      LiquidacionCajaService.obtenerSaldoCaja(fincaId.value),
+      LiquidacionCajaService.listarEntregasBanco(fincaId.value)
+    ])
     pendientes.value = (pendientesResponse.data || []).flatMap(salida => (salida.items || []).map(item => ({
       ...item, salidaId: salida.salidaId, tipoDocumento: salida.tipo, numeroDocumento: salida.numero,
       fecha: salida.fecha, fincaNombre: salida.fincaNombre, destino: salida.destino
     })))
     saldoCaja.value = saldoResponse.data?.saldoDisponible || 0
+    entregasBanco.value = entregasResponse.data || []
     Object.keys(seleccionados).forEach(id => delete seleccionados[id])
   } catch (error) {
     console.error('Error al cargar liquidación de caja', error)

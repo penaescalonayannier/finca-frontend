@@ -60,6 +60,17 @@ export interface EntregaBancoRequest {
   observaciones?: string
 }
 
+export interface EntregaBancoHistorial {
+  id: string
+  fincaId: string
+  fecha: string
+  importe: number
+  referenciaBancaria?: string
+  entregadoPor?: string
+  recibidoPor?: string
+  observaciones?: string
+}
+
 class LiquidacionCajaService {
   pendientes(fincaId: string, fechaInicio: string, fechaFin: string): Promise<AxiosResponse<SalidaPendienteLiquidacion[]>> {
     return axios.get(`${BASE_URL}/pendientes`, { params: { fincaId, fechaInicio, fechaFin } })
@@ -75,6 +86,10 @@ class LiquidacionCajaService {
 
   entregarAlBanco(data: EntregaBancoRequest): Promise<AxiosResponse<{ id: string }>> {
     return axios.post(`${BASE_URL}/caja/entregas-banco`, data)
+  }
+
+  listarEntregasBanco(fincaId: string): Promise<AxiosResponse<EntregaBancoHistorial[]>> {
+    return axios.get(`${BASE_URL}/caja/entregas-banco`, { params: { fincaId } })
   }
 }
 
