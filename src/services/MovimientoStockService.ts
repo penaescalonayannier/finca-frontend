@@ -222,6 +222,21 @@ export interface SalidaPorDestino {
   productos: SalidaProductoDetalle[]
 }
 
+/**
+ * Documento que respalda un cobro en efectivo dentro del período consultado.
+ * Los documentos se incluyen en el consolidado para que el importe mostrado
+ * pueda ser auditado desde el vale o la factura que lo originó.
+ */
+export interface DocumentoEfectivo {
+  tipoDocumento: 'VALE' | 'FACTURA' | string
+  numeroDocumento: string
+  fecha: string
+  destino?: string
+  referencia?: string
+  importe: number
+  pagado?: boolean
+}
+
 export interface ReporteConsolidado {
   fechaInicio: string
   fechaFin: string
@@ -230,6 +245,10 @@ export interface ReporteConsolidado {
   entradasPorProducto: EntradaPorProducto[]
   salidasPorDestino: SalidaPorDestino[]
   entradasPorTipo: Record<string, number>
+  /** Total efectivamente cobrado, respaldado por vales y facturas pagados. */
+  efectivoGenerado: number
+  /** Detalle documental que compone el efectivo generado. */
+  documentosEfectivo: DocumentoEfectivo[]
 }
 
 export default new MovimientoStockService()

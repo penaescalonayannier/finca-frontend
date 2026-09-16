@@ -31,7 +31,7 @@
         </button>
         <button class="btn-pdf" @click="descargarPdf" :disabled="loading || generandoPdf">
           <span v-if="generandoPdf">Generando PDF...</span>
-          <span v-else>Descargar PDF</span>
+          <span v-else>Descargar PDF detallado</span>
         </button>
       </div>
     </div>
@@ -52,7 +52,59 @@
           <span class="stat-label">Balance</span>
           <span class="stat-value">{{ balance >= 0 ? '+' : '' }}{{ balance.toLocaleString() }}</span>
         </div>
+        <div class="stat efectivo">
+          <span class="stat-label">Efectivo generado</span>
+          <span class="stat-value">{{ formatCurrency(reporte.efectivoGenerado) }}</span>
+          <small>{{ documentosEfectivo.length }} documento{{ documentosEfectivo.length === 1 ? '' : 's' }} de respaldo</small>
+        </div>
       </div>
+    </div>
+
+    <!-- Cobros con trazabilidad documental -->
+    <div v-if="reporte" class="seccion card seccion-efectivo">
+      <div class="seccion-header">
+        <div>
+          <h3>Efectivo generado</h3>
+          <p>Importes cobrados en efectivo durante el período, identificados por su vale o factura de origen.</p>
+        </div>
+        <span class="total-efectivo">{{ formatCurrency(reporte.efectivoGenerado) }}</span>
+      </div>
+      <div v-if="documentosEfectivo.length" class="tabla-container">
+        <table class="tabla-efectivo">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Documento</th>
+              <th>Fecha</th>
+              <th>Destino</th>
+              <th>Concepto / referencia</th>
+              <th>Estado</th>
+              <th class="importe">Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(documento, index) in documentosEfectivo" :key="`${documento.tipoDocumento}-${documento.numeroDocumento}-${documento.fecha}-${index}`">
+              <td><span class="documento-tipo" :class="getTipoDocumentoClass(documento.tipoDocumento)">{{ documento.tipoDocumento }}</span></td>
+              <td class="numero-documento">{{ documento.numeroDocumento }}</td>
+              <td>{{ formatDate(documento.fecha) }}</td>
+              <td>{{ documento.destino || '—' }}</td>
+              <td>{{ documento.referencia || '—' }}</td>
+              <td><span class="estado-cobro" :class="{ pendiente: documento.pagado === false }">{{ documento.pagado === false ? 'Pendiente' : 'Cobrado' }}</span></td>
+              <td class="importe">{{ formatCurrency(documento.importe) }}</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6"><strong>TOTAL EFECTIVO GENERADO</strong></td>
+              <td class="importe"><strong>{{ formatCurrency(reporte.efectivoGenerado) }}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div v-else class="sin-efectivo">
+        No se registraron cobros en efectivo mediante vales o facturas en el período seleccionado.
+      </div>
+      <p class="nota-pdf">El botón “Descargar PDF detallado” incluye este resumen y sus documentos de respaldo.</p>
     </div>
 
     <!-- Tabla Unificada por Producto -->
@@ -153,7 +205,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import MovimientoStockService, { type ReporteConsolidado } from '@/services/MovimientoStockService'
+import MovimientoStockService, { type DocumentoEfectivo, type ReporteConsolidado } from '@/services/MovimientoStockService'
 import FincaService from '@/services/FincaService'
 
 interface Finca {
@@ -196,6 +248,10 @@ const totalIngresos = computed(() => {
   if (!reporte.value) return 0
   return reporte.value.salidasPorDestino.reduce((sum, d) => sum + d.valorTotal, 0)
 })
+
+const documentosEfectivo = computed<DocumentoEfectivo[]>(() =>
+  reporte.value?.documentosEfectivo || []
+)
 
 // Tabla unificada: combina entradas y salidas por producto
 const tablaUnificada = computed<ProductoUnificado[]>(() => {
@@ -305,9 +361,17 @@ const descargarPdf = async () => {
 }
 
 const formatDate = (dateStr: string) => {
+  if (!dateStr) return '—'
   const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return dateStr
   return date.toLocaleDateString('es-CU', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+const formatCurrency = (value?: number) =>
+  `$${(value || 0).toLocaleString('es-CU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+const getTipoDocumentoClass = (tipo: string) =>
+  tipo?.toUpperCase() === 'FACTURA' ? 'factura' : 'vale'
 
 const formatDestino = (destino: string) => {
   const nombres: Record<string, string> = {
@@ -523,6 +587,20 @@ onMounted(() => {
   color: #dc2626;
 }
 
+.stat.efectivo {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+}
+
+.stat.efectivo .stat-value {
+  color: #1d4ed8;
+}
+
+.stat.efectivo small {
+  color: #475569;
+  margin-top: 0.3rem;
+}
+
 .seccion h3 {
   margin: 0 0 1rem 0;
   color: #334155;
@@ -530,6 +608,80 @@ onMounted(() => {
   padding-bottom: 0.5rem;
   font-weight: 600;
 }
+
+.seccion-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.seccion-header h3 {
+  border: 0;
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+
+.seccion-header p,
+.nota-pdf {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0 0 0.75rem;
+}
+
+.total-efectivo {
+  color: #1d4ed8;
+  font-size: 1.4rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tabla-efectivo {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+}
+
+.tabla-efectivo th,
+.tabla-efectivo td {
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.tabla-efectivo th {
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tabla-efectivo tbody tr:hover { background: #f8fafc; }
+.tabla-efectivo .importe { text-align: right; font-variant-numeric: tabular-nums; }
+.tabla-efectivo tbody .importe { color: #047857; font-weight: 600; }
+.tabla-efectivo tfoot td { background: #dbeafe; color: #1e3a8a; border-top: 2px solid #93c5fd; }
+
+.documento-tipo,
+.estado-cobro {
+  display: inline-block;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.55rem;
+}
+
+.documento-tipo.vale { background: #ede9fe; color: #6d28d9; }
+.documento-tipo.factura { background: #dcfce7; color: #166534; }
+.estado-cobro { background: #dcfce7; color: #166534; }
+.estado-cobro.pendiente { background: #fef3c7; color: #92400e; }
+.numero-documento { font-weight: 600; white-space: nowrap; }
+.sin-efectivo { color: #64748b; padding: 1rem 0; }
+.nota-pdf { margin: 1rem 0 0; font-style: italic; }
 
 /* Tabla unificada */
 .tabla-container {
