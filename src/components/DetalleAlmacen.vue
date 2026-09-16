@@ -23,6 +23,13 @@
         <div class="section-header">
           <h4>Productos en Almacen</h4>
           <div class="section-actions">
+            <button
+              @click="abrirModalTarjetaEstiba"
+              class="btn-tarjeta-estiba"
+              :disabled="!almacen?.productos?.length"
+            >
+              ▤ Tarjeta de estiba
+            </button>
             <button @click="abrirModalSalidaMultiple" class="btn-salida-multiple" :disabled="!almacen?.productos?.some(p => p.stock > 0)">
               ↑ Salida múltiple
             </button>
@@ -139,6 +146,56 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- La tarjeta es una consulta documental: no ejecuta ningún movimiento de stock. -->
+    <div v-if="mostrarModalTarjetaEstiba" class="modal-overlay" @click.self="cerrarModalTarjetaEstiba">
+      <div class="modal-operacion modal-tarjeta-estiba">
+        <div class="modal-header modal-header-estiba">
+          <div>
+            <h4>▤ Tarjeta de estiba</h4>
+            <small>Movimientos del producto dentro de este almacén</small>
+          </div>
+          <button @click="cerrarModalTarjetaEstiba" class="btn-cerrar-modal" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="estiba-info">
+            <strong>{{ almacen?.nombre }}</strong>
+            <span>{{ almacen?.inventario }}</span>
+          </div>
+
+          <div class="form-group">
+            <label for="tarjeta-estiba-producto">Producto *</label>
+            <select id="tarjeta-estiba-producto" v-model="tarjetaEstibaForm.fincaProductoId" class="form-control">
+              <option value="">Seleccione un producto...</option>
+              <option v-for="producto in almacen?.productos || []" :key="producto.fincaProductoId" :value="producto.fincaProductoId">
+                {{ producto.productoName }}{{ producto.unidadMedida ? ` (${producto.unidadMedida})` : '' }} — Stock: {{ producto.stock }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-row estiba-periodo">
+            <div class="form-group">
+              <label for="tarjeta-estiba-inicio">Desde *</label>
+              <input id="tarjeta-estiba-inicio" v-model="tarjetaEstibaForm.fechaInicio" type="date" class="form-control" :max="tarjetaEstibaForm.fechaFin" />
+            </div>
+            <div class="form-group">
+              <label for="tarjeta-estiba-fin">Hasta *</label>
+              <input id="tarjeta-estiba-fin" v-model="tarjetaEstibaForm.fechaFin" type="date" class="form-control" :min="tarjetaEstibaForm.fechaInicio" />
+            </div>
+          </div>
+
+          <p class="estiba-help">
+            El PDF incluye el saldo inicial, las entradas, las salidas y el saldo por cada movimiento del período seleccionado.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button @click="cerrarModalTarjetaEstiba" class="btn-cancelar">Cancelar</button>
+          <button @click="descargarTarjetaEstiba" class="btn-confirmar btn-estiba-confirm" :disabled="!tarjetaEstibaValida || descargandoTarjetaEstiba">
+            {{ descargandoTarjetaEstiba ? 'Generando PDF...' : 'Descargar PDF' }}
+          </button>
         </div>
       </div>
     </div>
@@ -662,6 +719,7 @@ import AlmacenService from '@/services/AlmacenService'
 import FincaProductoService from '@/services/FincaProductoService'
 import SalidaService from '@/services/SalidaService'
 import TrabajadorService from '@/services/TrabajadorService'
+import MovimientoStockService from '@/services/MovimientoStockService'
 import { AsientoContableService } from '@/services/ContabilidadService'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
@@ -703,8 +761,10 @@ const mostrarModalEntrada = ref(false)
 const mostrarModalSalida = ref(false)
 const mostrarModalSalidaMultiple = ref(false)
 const mostrarModalTransferencia = ref(false)
+const mostrarModalTarjetaEstiba = ref(false)
 const productoOperacion = ref<AlmacenFincaProducto | null>(null)
 const procesando = ref(false)
+const descargandoTarjetaEstiba = ref(false)
 const almacenesDestino = ref<AlmacenFincaProducto[]>([])
 const cargandoDestinos = ref(false)
 
@@ -873,6 +933,26 @@ const transferenciaForm = reactive({
   observaciones: ''
 })
 
+const fechaLocal = (date: Date): string => {
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+
+const fechaActual = new Date()
+const primerDiaDelMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1)
+const tarjetaEstibaForm = reactive({
+  fincaProductoId: '',
+  fechaInicio: fechaLocal(primerDiaDelMes),
+  fechaFin: fechaLocal(fechaActual)
+})
+
+const tarjetaEstibaValida = computed(() => Boolean(
+  tarjetaEstibaForm.fincaProductoId &&
+  tarjetaEstibaForm.fechaInicio &&
+  tarjetaEstibaForm.fechaFin &&
+  tarjetaEstibaForm.fechaInicio <= tarjetaEstibaForm.fechaFin
+))
+
 const totalStock = computed(() => {
   if (!almacen.value?.productos) return 0
   return almacen.value.productos.reduce((sum, p) => sum + (p.stock || 0), 0)
@@ -957,6 +1037,45 @@ const editarAlmacen = () => {
 
 const cerrar = () => {
   emit('close')
+}
+
+const abrirModalTarjetaEstiba = () => {
+  const productos = almacen.value?.productos || []
+  if (productos.length === 0) {
+    notify.error('Sin productos', 'Agregue un producto al almacén antes de generar la tarjeta de estiba')
+    return
+  }
+  tarjetaEstibaForm.fincaProductoId = productos[0].fincaProductoId
+  mostrarModalTarjetaEstiba.value = true
+}
+
+const cerrarModalTarjetaEstiba = () => {
+  if (!descargandoTarjetaEstiba.value) {
+    mostrarModalTarjetaEstiba.value = false
+  }
+}
+
+const descargarTarjetaEstiba = async () => {
+  if (!tarjetaEstibaValida.value) {
+    notify.error('Datos incompletos', 'Seleccione el producto y un período válido')
+    return
+  }
+
+  descargandoTarjetaEstiba.value = true
+  try {
+    await MovimientoStockService.descargarTarjetaEstibaPdf({
+      almacenId: props.almacenId,
+      fincaProductoId: tarjetaEstibaForm.fincaProductoId,
+      fechaInicio: tarjetaEstibaForm.fechaInicio,
+      fechaFin: tarjetaEstibaForm.fechaFin
+    })
+    notify.success('Tarjeta generada', 'El PDF de la tarjeta de estiba se descargó correctamente')
+  } catch (error) {
+    console.error('Error al generar tarjeta de estiba:', error)
+    notify.error('No se pudo generar la tarjeta', 'Revise el período seleccionado e inténtelo nuevamente')
+  } finally {
+    descargandoTarjetaEstiba.value = false
+  }
 }
 
 // Cargar todos los productos de la finca al abrir el modal
@@ -1566,6 +1685,25 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.btn-tarjeta-estiba {
+  padding: 8px 16px;
+  background: #34495e;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-tarjeta-estiba:hover:not(:disabled) {
+  background: #2c3e50;
+}
+
+.btn-tarjeta-estiba:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .btn-salida-multiple:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -2125,6 +2263,56 @@ onMounted(() => {
   color: white;
 }
 
+.modal-header-estiba {
+  background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+  color: white;
+}
+
+.modal-header-estiba h4 {
+  margin: 0 0 3px;
+}
+
+.modal-header-estiba small {
+  opacity: 0.85;
+}
+
+.modal-tarjeta-estiba {
+  max-width: 540px;
+}
+
+.estiba-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 13px;
+  margin-bottom: 20px;
+  border: 1px solid #dfe6e9;
+  border-radius: 7px;
+  background: #f8fafb;
+  color: #34495e;
+}
+
+.estiba-info span {
+  color: #6c7a89;
+  font-size: 0.88em;
+}
+
+.estiba-periodo .form-group {
+  flex: 1;
+}
+
+.estiba-help {
+  margin: 0;
+  padding: 11px 13px;
+  background: #f2f6f8;
+  border-left: 3px solid #34495e;
+  border-radius: 4px;
+  color: #52616b;
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+
 .producto-seleccionado {
   display: flex;
   justify-content: space-between;
@@ -2206,6 +2394,14 @@ textarea.form-control {
 
 .btn-transferencia-confirm:hover:not(:disabled) {
   background: #2980b9;
+}
+
+.btn-estiba-confirm {
+  background: #34495e;
+}
+
+.btn-estiba-confirm:hover:not(:disabled) {
+  background: #2c3e50;
 }
 
 /* Modal Salida Completa */

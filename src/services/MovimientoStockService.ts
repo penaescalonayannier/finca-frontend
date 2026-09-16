@@ -29,6 +29,13 @@ export interface AjusteStockResponse {
   stockNuevo: number
 }
 
+export interface TarjetaEstibaPdfParams {
+  almacenId: string
+  fincaProductoId: string
+  fechaInicio: string
+  fechaFin: string
+}
+
 class MovimientoStockService {
   crearAjuste(data: AjusteStockRequest): Promise<AxiosResponse<AjusteStockResponse>> {
     return axios.post(`${API_BASE_URL}/ajuste`, data)
@@ -111,6 +118,32 @@ class MovimientoStockService {
     const contentDisposition = response.headers['content-disposition'] as string | undefined
     const filename = contentDisposition?.match(/filename="?([^";]+)"?/)?.[1]
       || `Reporte_movimientos_por_destino_${fechaInicio}_${fechaFin}.pdf`
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  /**
+   * Descarga la Tarjeta de Estiba de un producto dentro de un almacén para el
+   * período indicado. El recurso es de consulta: no registra movimientos ni
+   * modifica existencias.
+   */
+  async descargarTarjetaEstibaPdf(params: TarjetaEstibaPdfParams): Promise<void> {
+    const response = await axios.get(`${API_BASE_URL}/tarjeta-estiba/pdf`, {
+      params,
+      responseType: 'blob'
+    })
+    const contentDisposition = response.headers['content-disposition'] as string | undefined
+    const encodedFilename = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    const filename = encodedFilename
+      ? decodeURIComponent(encodedFilename)
+      : contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1]
+        || `Tarjeta_de_estiba_${params.fechaInicio}_${params.fechaFin}.pdf`
     const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
     const link = document.createElement('a')
     link.href = url
