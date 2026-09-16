@@ -41,6 +41,31 @@ class ProduccionTerminadaService {
     return axios.get(`${API_BASE_URL}/${id}`)
   }
 
+  // Descargar el modelo oficial SC-2-06 de una producción terminada
+  async descargarPdf(id: string): Promise<void> {
+    const response = await axios.get(`${API_BASE_URL}/${id}/pdf`, {
+      responseType: 'blob'
+    })
+
+    const contentDisposition = response.headers['content-disposition'] as string | undefined
+    const filenameMatch = contentDisposition?.match(
+      /filename\*=UTF-8''([^;]+)|filename[^;=\n]*=((['"]).*?\3|[^;\n]*)/
+    )
+    const rawFilename = filenameMatch?.[1] || filenameMatch?.[2]
+    const filename = rawFilename
+      ? decodeURIComponent(rawFilename.replace(/["']/g, ''))
+      : `SC-2-06_Produccion_Terminada_${id}.pdf`
+
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
   // Búsqueda paginada
   search(params: SearchParams): Promise<AxiosResponse<ProduccionTerminadaResponse>> {
     const sortType = params.sortType || 'DES'

@@ -72,6 +72,14 @@
           <td>{{ registro.trabajadorRecibeNombre }}</td>
           <td class="observaciones-cell">{{ registro.observaciones || '-' }}</td>
           <td class="acciones">
+            <button
+              @click="descargarPdf(registro)"
+              class="btn-pdf"
+              :disabled="produccionDescargandoId === registro.id"
+              title="Descargar modelo oficial SC-2-06"
+            >
+              {{ produccionDescargandoId === registro.id ? 'Generando...' : 'PDF SC-2-06' }}
+            </button>
             <button @click="editarRegistro(registro)" class="btn-editar">Editar</button>
             <button @click="confirmarEliminar(registro)" class="btn-eliminar">Eliminar</button>
           </td>
@@ -210,6 +218,7 @@ const trabajadores = ref<Trabajador[]>([])
 const fincas = ref<Finca[]>([])
 const isLoading = ref(false)
 const isGuardando = ref(false)
+const produccionDescargandoId = ref<string | null>(null)
 const searchQuery = ref('')
 const paginaActual = ref(0)
 const tamanoPagina = ref(10)
@@ -427,6 +436,20 @@ const confirmarEliminar = async (registro: ProduccionTerminada) => {
   }
 }
 
+const descargarPdf = async (registro: ProduccionTerminada) => {
+  produccionDescargandoId.value = registro.id
+  try {
+    await ProduccionTerminadaService.descargarPdf(registro.id)
+    notify.success('Modelo descargado', 'Se descargó el modelo oficial SC-2-06 de producción terminada')
+  } catch (error: unknown) {
+    console.error('Error al descargar el modelo de producción terminada:', error)
+    const err = error as { response?: { data?: { message?: string } } }
+    notify.error('Error', err.response?.data?.message || 'No se pudo descargar el modelo oficial SC-2-06')
+  } finally {
+    produccionDescargandoId.value = null
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   cargarFincas()
@@ -596,6 +619,16 @@ h2 {
 .btn-eliminar {
   background-color: #e74c3c;
   color: white;
+}
+
+.btn-pdf {
+  background-color: #8e44ad;
+  color: white;
+}
+
+.btn-pdf:disabled {
+  background-color: #c39bd3;
+  cursor: wait;
 }
 
 .pagination {
