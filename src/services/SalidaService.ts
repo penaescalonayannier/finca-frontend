@@ -86,6 +86,35 @@ class SalidaService {
     window.URL.revokeObjectURL(url)
   }
 
+  /**
+   * Descarga el modelo individual del vale de salida.
+   * Esta operación es de solo lectura: no modifica el vale, inventario ni contabilidad.
+   */
+  async descargarVale(id: string): Promise<void> {
+    const response = await axios.get(`${API_BASE_URL}/${id}/pdf`, {
+      responseType: 'blob'
+    })
+
+    const contentDisposition = response.headers['content-disposition']
+    let filename = `Vale_salida_${id}.pdf`
+    if (contentDisposition) {
+      const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (matches && matches[1]) {
+        filename = matches[1].replace(/['"]/g, '')
+      }
+    }
+
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
   async descargarValesConsolidados(fecha: string, destino: string): Promise<void> {
     const response = await axios.get(`${API_BASE_URL}/vales/consolidado`, {
       params: { fecha, destino },

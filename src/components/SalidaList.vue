@@ -71,7 +71,14 @@
           <td>{{ formatFecha(salida.fecha) }}</td>
           <td class="acciones">
             <button @click="verDetalles(salida)" class="btn-ver">Ver</button>
-            <button @click="descargarFactura(salida)" class="btn-descargar">PDF</button>
+            <button
+              @click="descargarDocumento(salida)"
+              class="btn-descargar"
+              :disabled="salidaDescargandoId === salida.id"
+              :title="salida.tipo === 'VALE' ? 'Descargar modelo de vale de salida' : 'Descargar factura'"
+            >
+              {{ salidaDescargandoId === salida.id ? 'Generando...' : (salida.tipo === 'VALE' ? 'PDF vale' : 'PDF factura') }}
+            </button>
             <button @click="confirmarEliminar(salida)" class="btn-eliminar">Eliminar</button>
           </td>
         </tr>
@@ -283,6 +290,7 @@ const formConsolidado = ref({
 })
 const valesConsolidado = ref<Salida[]>([])
 const valesSeleccionados = ref<Set<string>>(new Set())
+const salidaDescargandoId = ref<string | null>(null)
 
 const salidaSeleccionada = ref<Salida | null>(null)
 
@@ -452,13 +460,25 @@ const cerrarModalDetalles = () => {
   salidaSeleccionada.value = null
 }
 
-// Descargar factura PDF
-const descargarFactura = async (salida: Salida) => {
+// Descargar el documento individual correspondiente sin alterar la salida.
+const descargarDocumento = async (salida: Salida) => {
+  if (salidaDescargandoId.value) return
+  salidaDescargandoId.value = salida.id
   try {
-    await SalidaService.descargarFactura(salida.id)
+    if (salida.tipo === 'VALE') {
+      await SalidaService.descargarVale(salida.id)
+      notify.success('Modelo de vale descargado', `Se descargó el vale ${salida.numero}`)
+    } else {
+      await SalidaService.descargarFactura(salida.id)
+      notify.success('Factura descargada', `Se descargó la factura ${salida.numero}`)
+    }
   } catch (error) {
-    console.error('Error al descargar factura:', error)
-    alert('Error al descargar la factura')
+    console.error('Error al descargar documento:', error)
+    notify.error('Error', salida.tipo === 'VALE'
+      ? 'No se pudo generar el PDF del vale'
+      : 'No se pudo descargar la factura')
+  } finally {
+    salidaDescargandoId.value = null
   }
 }
 
@@ -709,6 +729,11 @@ h2 {
 .btn-descargar {
   background-color: var(--color-primary);
   color: white;
+}
+
+.btn-descargar:disabled {
+  background-color: #95a5a6;
+  cursor: wait;
 }
 
 .btn-eliminar {
