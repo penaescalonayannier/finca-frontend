@@ -55,7 +55,7 @@
       <div v-else-if="!pendientes.length" class="empty success">No hay renglones pendientes de liquidación.</div>
       <div v-else class="table-wrap">
         <table>
-          <thead><tr><th></th><th>Documento</th><th>Fecha</th><th>Trabajador / finca</th><th>Producto</th><th>Saldo</th><th>Efectivo</th><th>Transferencia</th><th>Referencia bancaria</th><th>Por liquidar</th></tr></thead>
+          <thead><tr><th><input :checked="todosSeleccionados" type="checkbox" aria-label="Seleccionar todos los renglones pendientes" @change="alternarTodos" /></th><th>Documento</th><th>Fecha</th><th>Trabajador / finca</th><th>Producto</th><th>Saldo</th><th>Efectivo</th><th>Transferencia</th><th>Referencia bancaria</th><th>Por liquidar</th></tr></thead>
           <tbody>
             <tr v-for="item in pendientes" :key="item.itemSalidaId" :class="{ seleccionado: estaSeleccionado(item.itemSalidaId) }">
               <td><input :checked="estaSeleccionado(item.itemSalidaId)" type="checkbox" :aria-label="`Seleccionar ${item.numeroDocumento}`" @change="alternar(item)" /></td>
@@ -117,6 +117,7 @@ const seleccionados = reactive<Record<string, Distribucion>>({})
 const entrega = reactive<EntregaBancoRequest>({ fincaId: '', importe: 0, fecha: new Date().toISOString().slice(0, 10), referenciaBancaria: '', observaciones: '' })
 
 const estaSeleccionado = (id: string) => !!seleccionados[id]
+const todosSeleccionados = computed(() => pendientes.value.length > 0 && pendientes.value.every(item => estaSeleccionado(item.itemSalidaId)))
 const redondear = (valor: number) => Math.round((Number(valor) || 0) * 100) / 100
 const restante = (item: ItemPendienteLiquidacion) => {
   const pago = seleccionados[item.itemSalidaId]
@@ -155,6 +156,20 @@ const errorValidacion = computed(() => {
 function alternar(item: ItemPendienteLiquidacion) {
   if (estaSeleccionado(item.itemSalidaId)) delete seleccionados[item.itemSalidaId]
   else seleccionados[item.itemSalidaId] = { efectivo: item.saldoPendiente, transferencia: 0, referenciaBancaria: '' }
+}
+
+function alternarTodos() {
+  if (todosSeleccionados.value) {
+    Object.keys(seleccionados).forEach(id => delete seleccionados[id])
+    return
+  }
+  for (const item of pendientes.value) {
+    seleccionados[item.itemSalidaId] = {
+      efectivo: item.saldoPendiente,
+      transferencia: 0,
+      referenciaBancaria: ''
+    }
+  }
 }
 
 function normalizar(id: string) {
