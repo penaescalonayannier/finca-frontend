@@ -33,6 +33,13 @@ export interface AplicacionLiquidacion {
   importe: number
   formaPago: 'EFECTIVO' | 'TRANSFERENCIA'
   referenciaBancaria?: string
+  /** Billetes físicos recibidos para esta aplicación en efectivo. */
+  denominaciones?: DenominacionCantidad[]
+}
+
+export interface DenominacionCantidad {
+  denominacion: number
+  cantidad: number
 }
 
 export interface LiquidarSalidaRequest {
@@ -48,6 +55,10 @@ export interface SaldoCaja {
   efectivoCobrado: number
   entregadoBanco: number
   saldoDisponible: number
+  /** Existencia física controlada desde la apertura y los cobros desglosados. */
+  denominaciones?: DenominacionCantidad[]
+  /** Efectivo histórico cuya composición física no fue registrada. */
+  pendienteSinDesglose?: number
 }
 
 export interface EntregaBancoRequest {
@@ -58,6 +69,14 @@ export interface EntregaBancoRequest {
   entregadoPor?: string
   recibidoPor?: string
   observaciones?: string
+  denominaciones?: DenominacionCantidad[]
+}
+
+export interface AperturaCajaRequest {
+  fincaId: string
+  fecha?: string
+  observaciones?: string
+  denominaciones: DenominacionCantidad[]
 }
 
 export interface EntregaBancoHistorial {
@@ -69,6 +88,7 @@ export interface EntregaBancoHistorial {
   entregadoPor?: string
   recibidoPor?: string
   observaciones?: string
+  denominaciones?: DenominacionCantidad[]
 }
 
 class LiquidacionCajaService {
@@ -90,6 +110,10 @@ class LiquidacionCajaService {
 
   listarEntregasBanco(fincaId: string): Promise<AxiosResponse<EntregaBancoHistorial[]>> {
     return axios.get(`${BASE_URL}/caja/entregas-banco`, { params: { fincaId } })
+  }
+
+  registrarApertura(data: AperturaCajaRequest): Promise<AxiosResponse<{ id: string }>> {
+    return axios.post(`${BASE_URL}/caja/apertura`, data)
   }
 }
 
