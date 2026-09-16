@@ -199,6 +199,15 @@
             <router-link to="/arqueos-caja" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-magnifying-glass-dollar"></i> Arqueos de Caja
             </router-link>
+            <router-link to="/caja-oficial" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-vault"></i> Fondos y Control de Caja
+            </router-link>
+            <router-link to="/documentos-caja" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-file-signature"></i> Documentos de Caja
+            </router-link>
+            <router-link to="/banco" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-building-columns"></i> Banco y Conciliación
+            </router-link>
             <router-link to="/reportes/ventas-pagos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-receipt"></i> Resumen Ventas/Pagos
             </router-link>

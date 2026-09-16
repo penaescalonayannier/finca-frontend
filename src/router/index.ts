@@ -56,6 +56,9 @@ import GrupoActivoFijoList from '@/components/GrupoActivoFijoList.vue'
 import ReporteConsolidadoMovimientos from '@/views/ReporteConsolidadoMovimientos.vue'
 import LiquidacionCajaView from '@/views/LiquidacionCajaView.vue'
 import ArqueosCajaView from '@/views/ArqueosCajaView.vue'
+import CajaOficialView from '@/views/CajaOficialView.vue'
+import DocumentosCajaView from '@/views/DocumentosCajaView.vue'
+import BancoView from '@/views/BancoView.vue'
 import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
 import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
 import EditarTipoReporte from '@/components/EditarTipoReporte.vue'
@@ -363,6 +366,21 @@ const routes: RouteRecordRaw[] = [
     path: '/arqueos-caja',
     name: 'ArqueosCaja',
     component: ArqueosCajaView
+  },
+  {
+    path: '/caja-oficial',
+    name: 'CajaOficial',
+    component: CajaOficialView
+  },
+  {
+    path: '/documentos-caja',
+    name: 'DocumentosCaja',
+    component: DocumentosCajaView
+  },
+  {
+    path: '/banco',
+    name: 'Banco',
+    component: BancoView
   },
   // Tipos de Reporte (nomenclador)
   {
