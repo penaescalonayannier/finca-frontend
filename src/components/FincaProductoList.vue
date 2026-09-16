@@ -74,6 +74,13 @@
             ${{ ((relacion.productoPrice || 0) * relacion.stock).toFixed(2) }}
           </td>
           <td class="acciones">
+            <button
+              @click="abrirModalTarjetaEstiba(relacion)"
+              class="btn-tarjeta-estiba"
+              title="Generar tarjeta de estiba consolidada de la finca"
+            >
+              ▤ Estiba finca
+            </button>
             <button @click="abrirModalAjuste(relacion)" class="btn-ajuste" title="Ajustar existencias por almacén">
               ⚖️ Ajustar
             </button>
@@ -152,6 +159,55 @@
           <button @click="cerrarModalAsignar" class="btn-cancelar">Cancelar</button>
           <button @click="asignarProducto" class="btn-guardar" :disabled="!formAsignar.fincaId || !formAsignar.productoId || isGuardando">
             {{ isGuardando ? 'Guardando...' : 'Asignar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tarjeta de estiba consolidada: consulta los movimientos del producto en todos los almacenes de la finca. -->
+    <div v-if="mostrarModalTarjetaEstiba" class="modal" @click.self="cerrarModalTarjetaEstiba">
+      <div class="modal-content modal-tarjeta-estiba-finca">
+        <span class="close" @click="cerrarModalTarjetaEstiba">&times;</span>
+        <h3>▤ Tarjeta de estiba de la finca</h3>
+        <p v-if="relacionTarjetaEstiba" class="estiba-resumen">
+          <strong>{{ relacionTarjetaEstiba.productoName }}</strong> · {{ relacionTarjetaEstiba.fincaName }}
+          <br>
+          <span>Incluye los movimientos del producto en todos los almacenes de la finca.</span>
+        </p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tarjeta-estiba-finca-inicio">Desde *</label>
+            <input
+              id="tarjeta-estiba-finca-inicio"
+              v-model="tarjetaEstibaForm.fechaInicio"
+              type="date"
+              class="form-input"
+              :max="tarjetaEstibaForm.fechaFin"
+              :disabled="descargandoTarjetaEstiba"
+            >
+          </div>
+          <div class="form-group">
+            <label for="tarjeta-estiba-finca-fin">Hasta *</label>
+            <input
+              id="tarjeta-estiba-finca-fin"
+              v-model="tarjetaEstibaForm.fechaFin"
+              type="date"
+              class="form-input"
+              :min="tarjetaEstibaForm.fechaInicio"
+              :disabled="descargandoTarjetaEstiba"
+            >
+          </div>
+        </div>
+
+        <p class="estiba-ayuda">
+          El PDF muestra el saldo inicial, entradas, salidas y saldo por movimiento. Cada fila identifica el almacén que registró la operación.
+        </p>
+
+        <div class="form-actions">
+          <button @click="cerrarModalTarjetaEstiba" class="btn-cancelar" :disabled="descargandoTarjetaEstiba">Cancelar</button>
+          <button @click="descargarTarjetaEstiba" class="btn-guardar btn-estiba" :disabled="!tarjetaEstibaValida || descargandoTarjetaEstiba">
+            {{ descargandoTarjetaEstiba ? 'Generando PDF...' : 'Descargar PDF' }}
           </button>
         </div>
       </div>
@@ -256,6 +312,9 @@ const cargandoAlmacenes = ref(false)
 const isAjustando = ref(false)
 const relacionAjuste = ref<FincaProducto | null>(null)
 const almacenesProducto = ref<AlmacenFincaProducto[]>([])
+const mostrarModalTarjetaEstiba = ref(false)
+const relacionTarjetaEstiba = ref<FincaProducto | null>(null)
+const descargandoTarjetaEstiba = ref(false)
 const formAsignar = ref({
   fincaId: '',
   productoId: '',
@@ -269,6 +328,18 @@ const formAjuste = ref({
   observaciones: ''
 })
 
+const fechaLocal = (fecha: Date): string => {
+  const offset = fecha.getTimezoneOffset()
+  return new Date(fecha.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+
+const fechaActual = new Date()
+const primerDiaDelMes = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), 1)
+const tarjetaEstibaForm = ref({
+  fechaInicio: fechaLocal(primerDiaDelMes),
+  fechaFin: fechaLocal(fechaActual)
+})
+
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 const puedeGuardarAjuste = computed(() =>
@@ -276,6 +347,12 @@ const puedeGuardarAjuste = computed(() =>
   formAjuste.value.cantidad > 0 &&
   Boolean(formAjuste.value.observaciones.trim())
 )
+const tarjetaEstibaValida = computed(() => Boolean(
+  relacionTarjetaEstiba.value &&
+  tarjetaEstibaForm.value.fechaInicio &&
+  tarjetaEstibaForm.value.fechaFin &&
+  tarjetaEstibaForm.value.fechaInicio <= tarjetaEstibaForm.value.fechaFin
+))
 
 // Métodos
 const cargarFincas = async () => {
@@ -416,6 +493,43 @@ const cerrarModalAjuste = () => {
   mostrarModalAjuste.value = false
   relacionAjuste.value = null
   almacenesProducto.value = []
+}
+
+const abrirModalTarjetaEstiba = (relacion: FincaProducto) => {
+  relacionTarjetaEstiba.value = relacion
+  tarjetaEstibaForm.value = {
+    fechaInicio: fechaLocal(new Date(new Date().getFullYear(), new Date().getMonth(), 1)),
+    fechaFin: fechaLocal(new Date())
+  }
+  mostrarModalTarjetaEstiba.value = true
+}
+
+const cerrarModalTarjetaEstiba = () => {
+  if (descargandoTarjetaEstiba.value) return
+  mostrarModalTarjetaEstiba.value = false
+  relacionTarjetaEstiba.value = null
+}
+
+const descargarTarjetaEstiba = async () => {
+  if (!relacionTarjetaEstiba.value || !tarjetaEstibaValida.value) {
+    notify.warning('Datos incompletos', 'Seleccione un producto y un período válido')
+    return
+  }
+
+  descargandoTarjetaEstiba.value = true
+  try {
+    await MovimientoStockService.descargarTarjetaEstibaFincaPdf({
+      fincaProductoId: relacionTarjetaEstiba.value.id,
+      fechaInicio: tarjetaEstibaForm.value.fechaInicio,
+      fechaFin: tarjetaEstibaForm.value.fechaFin
+    })
+    notify.success('Tarjeta generada', 'El PDF consolidado de la finca se descargó correctamente')
+  } catch (error: unknown) {
+    console.error('Error al generar tarjeta de estiba de finca:', error)
+    notify.error('No se pudo generar la tarjeta', getApiErrorMessage(error, 'Revise el período seleccionado e inténtelo nuevamente'))
+  } finally {
+    descargandoTarjetaEstiba.value = false
+  }
 }
 
 const guardarAjuste = async () => {
@@ -812,6 +926,16 @@ h2 {
   transform: translateY(-2px);
 }
 
+.btn-tarjeta-estiba {
+  background-color: #34495e;
+  color: white;
+}
+
+.btn-tarjeta-estiba:hover {
+  background-color: #2c3e50;
+  transform: translateY(-2px);
+}
+
 .btn-eliminar {
   background-color: #e74c3c;
   color: white;
@@ -940,6 +1064,48 @@ h2 {
 
 .modal-ajuste {
   max-width: 520px;
+}
+
+.modal-tarjeta-estiba-finca {
+  max-width: 560px;
+}
+
+.modal-tarjeta-estiba-finca h3 {
+  margin: 0 30px 18px 0;
+  color: #2c3e50;
+}
+
+.estiba-resumen {
+  margin: 0 0 20px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #edf2f7;
+  color: #2d3748;
+  line-height: 1.5;
+}
+
+.estiba-resumen span {
+  color: #52616b;
+  font-size: 0.9em;
+}
+
+.estiba-ayuda {
+  margin: 4px 0 20px;
+  padding: 11px 13px;
+  background: #f2f6f8;
+  border-left: 3px solid #34495e;
+  border-radius: 4px;
+  color: #52616b;
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+
+.btn-estiba {
+  background-color: #34495e;
+}
+
+.btn-estiba:hover:not(:disabled) {
+  background-color: #2c3e50;
 }
 
 .ajuste-resumen {
