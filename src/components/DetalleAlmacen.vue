@@ -246,7 +246,7 @@
 
           <div class="form-group">
             <label>Cantidad</label>
-            <input v-model.number="entradaForm.cantidad" type="number" min="1" class="form-control" placeholder="Cantidad a ingresar" />
+            <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad a ingresar" />
           </div>
 
           <div v-if="entradaForm.tipo === 'ENTRADA_FACTURA'" class="form-group">
@@ -365,7 +365,7 @@
                 </div>
                 <div class="form-group cantidad-group">
                   <label>Cantidad *</label>
-                  <input v-model.number="item.cantidad" type="number" min="1" class="form-control" required />
+                  <input v-model.number="item.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" required />
                 </div>
                 <div class="form-group pagado-group" v-if="salidaForm.destino === 'TRABAJADORES'">
                   <label class="checkbox-label">
@@ -514,13 +514,14 @@
                     <input
                       v-model.number="linea.cantidad"
                       type="number"
-                      min="1"
+                      min="0.0001"
+                      step="0.0001"
                       :max="linea.stock"
                       :disabled="!linea.seleccionada"
                       class="form-control"
                     />
-                    <small v-if="linea.seleccionada && (!Number.isInteger(linea.cantidad) || linea.cantidad < 1 || linea.cantidad > linea.stock)" class="error-text">
-                      Entre 1 y {{ linea.stock }}
+                    <small v-if="linea.seleccionada && (!Number.isFinite(linea.cantidad) || linea.cantidad <= 0 || linea.cantidad > linea.stock)" class="error-text">
+                      Entre 0.0001 y {{ linea.stock }}
                     </small>
                   </template>
                 </span>
@@ -535,7 +536,7 @@
                     <option value="">Seleccione trabajador</option>
                     <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">{{ trabajador.nombre }}</option>
                   </select>
-                  <input v-model.number="item.cantidad" type="number" min="1" :max="linea.stock" class="form-control" placeholder="Cantidad" />
+                  <input v-model.number="item.cantidad" type="number" min="0.0001" step="0.0001" :max="linea.stock" class="form-control" placeholder="Cantidad" />
                   <label class="pagado-check"><input v-model="item.pagado" type="checkbox" /> Pagó</label>
                   <button v-if="linea.items.length > 1" type="button" class="btn-eliminar-comprador" @click="eliminarCompradorLinea(linea, index)">&times;</button>
                 </div>
@@ -591,7 +592,7 @@
 
           <div class="form-group">
             <label>Cantidad a Transferir</label>
-            <input v-model.number="transferenciaForm.cantidad" type="number" min="1" :max="productoOperacion?.stock" class="form-control" placeholder="Cantidad" />
+            <input v-model.number="transferenciaForm.cantidad" type="number" min="0.0001" step="0.0001" :max="productoOperacion?.stock" class="form-control" placeholder="Cantidad" />
             <small v-if="transferenciaForm.cantidad > (productoOperacion?.stock || 0)" class="error-text">
               No puede exceder el stock disponible
             </small>
@@ -768,7 +769,7 @@ const lineasSalidaMultipleSeleccionadas = computed(() =>
 )
 
 const cantidadAsignadaLinea = (linea: LineaSalidaMultipleForm): number =>
-  linea.items.reduce((total, item) => total + (Number.isInteger(item.cantidad) ? item.cantidad : 0), 0)
+  linea.items.reduce((total, item) => total + (Number.isFinite(item.cantidad) ? item.cantidad : 0), 0)
 
 const cantidadLineaSalidaMultiple = (linea: LineaSalidaMultipleForm): number =>
   salidaMultipleForm.destino === 'TRABAJADORES' ? cantidadAsignadaLinea(linea) : linea.cantidad
@@ -778,7 +779,7 @@ const lineaValidaParaTrabajadores = (linea: LineaSalidaMultipleForm): boolean =>
   const trabajadoresSeleccionados = new Set<string>()
   const itemsValidos = linea.items.every(item => {
     const trabajadorId = item.trabajadorId || ''
-    if (!trabajadorId || !Number.isInteger(item.cantidad) || item.cantidad < 1 || trabajadoresSeleccionados.has(trabajadorId)) {
+    if (!trabajadorId || !Number.isFinite(item.cantidad) || item.cantidad <= 0 || trabajadoresSeleccionados.has(trabajadorId)) {
       return false
     }
     trabajadoresSeleccionados.add(trabajadorId)
@@ -797,7 +798,7 @@ const esSalidaMultipleValida = computed(() =>
   lineasSalidaMultipleSeleccionadas.value.every(linea =>
     salidaMultipleForm.destino === 'TRABAJADORES'
       ? lineaValidaParaTrabajadores(linea)
-      : Number.isInteger(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
+      : Number.isFinite(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
   )
 )
 
