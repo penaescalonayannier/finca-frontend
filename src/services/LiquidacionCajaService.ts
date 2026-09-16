@@ -33,8 +33,12 @@ export interface AplicacionLiquidacion {
   importe: number
   formaPago: 'EFECTIVO' | 'TRANSFERENCIA'
   referenciaBancaria?: string
-  /** Billetes físicos recibidos para esta aplicación en efectivo. */
+  /** Compatibilidad para pagos exactos en efectivo, sin vuelto. */
   denominaciones?: DenominacionCantidad[]
+  /** Billetes recibidos del cliente, incluido cualquier excedente que origine vuelto. */
+  denominacionesRecibidas?: DenominacionCantidad[]
+  /** Billetes devueltos al cliente como cambio. */
+  denominacionesVuelto?: DenominacionCantidad[]
 }
 
 export interface DenominacionCantidad {
@@ -79,6 +83,14 @@ export interface AperturaCajaRequest {
   denominaciones: DenominacionCantidad[]
 }
 
+export interface CambioDenominacionesRequest {
+  fincaId: string
+  fecha?: string
+  observaciones?: string
+  denominacionesEntregadas: DenominacionCantidad[]
+  denominacionesRecibidas: DenominacionCantidad[]
+}
+
 export interface EntregaBancoHistorial {
   id: string
   fincaId: string
@@ -114,6 +126,10 @@ class LiquidacionCajaService {
 
   registrarApertura(data: AperturaCajaRequest): Promise<AxiosResponse<{ id: string }>> {
     return axios.post(`${BASE_URL}/caja/apertura`, data)
+  }
+
+  cambiarDenominaciones(data: CambioDenominacionesRequest): Promise<AxiosResponse<{ id: string }>> {
+    return axios.post(`${BASE_URL}/caja/cambios-denominaciones`, data)
   }
 }
 

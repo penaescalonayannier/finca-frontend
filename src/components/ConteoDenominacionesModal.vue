@@ -69,7 +69,8 @@ function cargarInicial() {
 
 watch(() => props.inicial, cargarInicial, { immediate: true, deep: true })
 
-const total = computed(() => DENOMINACIONES.reduce((suma, valor) => suma + valor * (Math.max(0, Number(cantidades[valor]) || 0)), 0))
+const cantidadEntera = (cantidad: number) => Math.max(0, Math.trunc(Number(cantidad) || 0))
+const total = computed(() => DENOMINACIONES.reduce((suma, valor) => suma + valor * cantidadEntera(cantidades[valor]), 0))
 const diferencia = computed(() => Math.round((total.value - (props.importeEsperado || 0)) * 100) / 100)
 const coincide = computed(() => props.importeEsperado == null || Math.abs(diferencia.value) < 0.005)
 const moneda = (importe: number) => `$${(importe || 0).toLocaleString('es-CU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -80,7 +81,7 @@ function limpiar() {
 
 function confirmar() {
   if (!coincide.value) return
-  emit('confirmar', DENOMINACIONES.map(denominacion => ({ denominacion, cantidad: Math.max(0, Math.trunc(Number(cantidades[denominacion]) || 0)) })).filter(item => item.cantidad > 0))
+  emit('confirmar', DENOMINACIONES.map(denominacion => ({ denominacion, cantidad: cantidadEntera(cantidades[denominacion]) })).filter(item => item.cantidad > 0))
 }
 </script>
 

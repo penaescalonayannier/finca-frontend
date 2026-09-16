@@ -42,6 +42,7 @@
           <label>Fecha de apertura<input v-model="apertura.fecha" type="date" /></label>
           <label>Observaciones<input v-model.trim="apertura.observaciones" maxlength="300" placeholder="Opcional" /></label>
           <button class="btn-secondary" :disabled="!fincaId || registrandoApertura" @click="abrirConteoApertura">{{ registrandoApertura ? 'Registrando...' : 'Registrar apertura física' }}</button>
+          <button class="btn-count" :disabled="!fincaId || registrandoCambio" @click="mostrarCambio = true">{{ registrandoCambio ? 'Cambiando...' : 'Cambiar billetes' }}</button>
         </div>
       </div>
       <p v-if="pendienteSinDesglose > 0" class="advertencia">Hay {{ moneda(pendienteSinDesglose) }} de efectivo histórico sin denominaciones. Registre una apertura física para iniciar el arqueo por billetes.</p>
@@ -108,7 +109,7 @@
               <td>{{ item.trabajadorNombre || '—' }}<small>{{ item.fincaNombre || '—' }}</small></td>
               <td>{{ item.productoNombre || '—' }}<small v-if="item.cantidad != null">Cant.: {{ item.cantidad }}</small></td>
               <td class="money">{{ moneda(item.saldoPendiente) }}</td>
-              <td><div v-if="estaSeleccionado(item.itemSalidaId)" class="efectivo-control"><input v-model.number="seleccionados[item.itemSalidaId].efectivo" type="number" min="0" :max="item.saldoPendiente" step="0.01" @input="normalizar(item.itemSalidaId)" /><button type="button" class="btn-count mini" :disabled="seleccionados[item.itemSalidaId].efectivo <= 0" @click="abrirConteoLiquidacion(item.itemSalidaId)">Billetes{{ seleccionados[item.itemSalidaId].denominaciones.length ? ' ✓' : '' }}</button></div></td>
+              <td><div v-if="estaSeleccionado(item.itemSalidaId)" class="efectivo-control"><input v-model.number="seleccionados[item.itemSalidaId].efectivo" type="number" min="0" :max="item.saldoPendiente" step="0.01" @input="normalizar(item.itemSalidaId)" /><button type="button" class="btn-count mini" :disabled="seleccionados[item.itemSalidaId].efectivo <= 0" @click="abrirConteoRecibido(item.itemSalidaId)">Recibido{{ seleccionados[item.itemSalidaId].denominaciones.length ? ' ✓' : '' }}</button><button v-if="requiereVuelto(item.itemSalidaId)" type="button" class="btn-count mini vuelto" @click="abrirConteoVuelto(item.itemSalidaId)">Vuelto{{ seleccionados[item.itemSalidaId].denominacionesVuelto.length ? ' ✓' : '' }}</button></div></td>
               <td><input v-if="estaSeleccionado(item.itemSalidaId)" v-model.number="seleccionados[item.itemSalidaId].transferencia" type="number" min="0" :max="item.saldoPendiente" step="0.01" @input="normalizar(item.itemSalidaId)" /></td>
               <td><input v-if="estaSeleccionado(item.itemSalidaId)" v-model.trim="seleccionados[item.itemSalidaId].referenciaBancaria" :disabled="seleccionados[item.itemSalidaId].transferencia <= 0" maxlength="100" placeholder="Obligatoria si transfiere" /></td>
               <td :class="{ error: restante(item) !== 0 }" class="money">{{ moneda(restante(item)) }}</td>
@@ -131,6 +132,13 @@
       @cancelar="cerrarConteo"
       @confirmar="confirmarConteo"
     />
+    <CambioDenominacionesModal
+      v-if="mostrarCambio"
+      :existencias="saldoDenominacionesRaw"
+      :fecha-inicial="hoyTexto"
+      @cancelar="mostrarCambio = false"
+      @confirmar="registrarCambioBilletes"
+    />
   </div>
 </template>
 
@@ -138,12 +146,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { notify } from '@/composables/useNotification'
 import ConteoDenominacionesModal from '@/components/ConteoDenominacionesModal.vue'
-import LiquidacionCajaService, { type AperturaCajaRequest, type DenominacionCantidad, type EntregaBancoHistorial, type EntregaBancoRequest, type ItemSalidaPendiente, type LiquidarSalidaRequest } from '@/services/LiquidacionCajaService'
+import CambioDenominacionesModal from '@/components/CambioDenominacionesModal.vue'
+import LiquidacionCajaService, { type AperturaCajaRequest, type CambioDenominacionesRequest, type DenominacionCantidad, type EntregaBancoHistorial, type EntregaBancoRequest, type ItemSalidaPendiente, type LiquidarSalidaRequest } from '@/services/LiquidacionCajaService'
 import FincaService from '@/services/FincaService'
 
 const DENOMINACIONES = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
 
-interface Distribucion { efectivo: number; transferencia: number; referenciaBancaria: string; denominaciones: DenominacionCantidad[] }
+interface Distribucion { efectivo: number; transferencia: number; referenciaBancaria: string; denominaciones: DenominacionCantidad[]; denominacionesVuelto: DenominacionCantidad[] }
 interface ItemPendienteLiquidacion extends ItemSalidaPendiente {
   salidaId: string
   tipoDocumento: string
@@ -159,6 +168,7 @@ interface LineaSeleccionada {
   transferencia: number
   referenciaBancaria?: string
   denominaciones: DenominacionCantidad[]
+  denominacionesVuelto: DenominacionCantidad[]
 }
 
 const pendientes = ref<ItemPendienteLiquidacion[]>([])
@@ -166,6 +176,7 @@ const entregasBanco = ref<EntregaBancoHistorial[]>([])
 const saldoCaja = ref(0)
 const fincaId = ref('')
 const hoy = new Date()
+const hoyTexto = hoy.toISOString().slice(0, 10)
 const fechaInicio = ref(new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10))
 const fechaFin = ref(hoy.toISOString().slice(0, 10))
 const fincas = ref<Array<{ id: string; code: string; name: string }>>([])
@@ -173,13 +184,15 @@ const cargando = ref(false)
 const guardando = ref(false)
 const registrandoEntrega = ref(false)
 const registrandoApertura = ref(false)
+const registrandoCambio = ref(false)
 const seleccionados = reactive<Record<string, Distribucion>>({})
 const entrega = reactive<EntregaBancoRequest>({ fincaId: '', importe: 0, fecha: new Date().toISOString().slice(0, 10), referenciaBancaria: '', observaciones: '', denominaciones: [] })
 const apertura = reactive<AperturaCajaRequest>({ fincaId: '', fecha: new Date().toISOString().slice(0, 10), observaciones: '', denominaciones: [] })
 const saldoDenominacionesRaw = ref<DenominacionCantidad[]>([])
 const pendienteSinDesglose = ref(0)
 const mostrarConteo = ref(false)
-const contextoConteo = ref<'LIQUIDACION' | 'ENTREGA' | 'APERTURA'>('LIQUIDACION')
+const mostrarCambio = ref(false)
+const contextoConteo = ref<'RECIBIDO' | 'VUELTO' | 'ENTREGA' | 'APERTURA'>('RECIBIDO')
 const itemConteoId = ref<string | null>(null)
 
 const estaSeleccionado = (id: string) => !!seleccionados[id]
@@ -195,13 +208,21 @@ const lineasSeleccionadas = computed<LineaSeleccionada[]>(() => pendientes.value
   efectivo: redondear(seleccionados[item.itemSalidaId].efectivo),
   transferencia: redondear(seleccionados[item.itemSalidaId].transferencia),
   referenciaBancaria: seleccionados[item.itemSalidaId].referenciaBancaria || undefined,
-  denominaciones: seleccionados[item.itemSalidaId].denominaciones
+  denominaciones: seleccionados[item.itemSalidaId].denominaciones,
+  denominacionesVuelto: seleccionados[item.itemSalidaId].denominacionesVuelto
 })))
 const solicitudesLiquidacion = computed<LiquidarSalidaRequest[]>(() => {
   const porSalida = new Map<string, LiquidarSalidaRequest>()
   for (const linea of lineasSeleccionadas.value) {
     const solicitud = porSalida.get(linea.salidaId) || { salidaId: linea.salidaId, aplicaciones: [] }
-    if (linea.efectivo > 0) solicitud.aplicaciones.push({ itemSalidaId: linea.itemSalidaId, importe: linea.efectivo, formaPago: 'EFECTIVO', denominaciones: linea.denominaciones })
+    if (linea.efectivo > 0) solicitud.aplicaciones.push({
+      itemSalidaId: linea.itemSalidaId,
+      importe: linea.efectivo,
+      formaPago: 'EFECTIVO',
+      denominaciones: linea.denominacionesVuelto.length ? undefined : linea.denominaciones,
+      denominacionesRecibidas: linea.denominaciones,
+      denominacionesVuelto: linea.denominacionesVuelto
+    })
     if (linea.transferencia > 0) solicitud.aplicaciones.push({ itemSalidaId: linea.itemSalidaId, importe: linea.transferencia, formaPago: 'TRANSFERENCIA', referenciaBancaria: linea.referenciaBancaria })
     porSalida.set(linea.salidaId, solicitud)
   }
@@ -212,34 +233,43 @@ const totalTransferencia = computed(() => lineasSeleccionadas.value.reduce((tota
 const totalSeleccionado = computed(() => totalEfectivo.value + totalTransferencia.value)
 const totalDenominaciones = (denominaciones?: DenominacionCantidad[]) => (denominaciones || []).reduce((total, item) => total + Number(item.denominacion || 0) * Number(item.cantidad || 0), 0)
 const coincideDenominaciones = (importe: number, denominaciones?: DenominacionCantidad[]) => Math.abs(totalDenominaciones(denominaciones) - importe) < 0.005
+const efectivoNetoRecibido = (linea: Distribucion) => totalDenominaciones(linea.denominaciones) - totalDenominaciones(linea.denominacionesVuelto)
+const requiereVuelto = (id: string) => {
+  const linea = seleccionados[id]
+  return !!linea && totalDenominaciones(linea.denominaciones) > linea.efectivo + 0.005
+}
 const conteoEntregaValido = computed(() => entrega.importe > 0 && coincideDenominaciones(entrega.importe, entrega.denominaciones))
 const saldoDenominaciones = computed(() => DENOMINACIONES.map(denominacion => ({ denominacion, cantidad: saldoDenominacionesRaw.value.find(item => item.denominacion === denominacion)?.cantidad || 0 })))
 const importeConteo = computed<number | null>(() => {
-  if (contextoConteo.value === 'LIQUIDACION' && itemConteoId.value) return seleccionados[itemConteoId.value]?.efectivo || 0
+  if (contextoConteo.value === 'VUELTO' && itemConteoId.value) {
+    const linea = seleccionados[itemConteoId.value]
+    return Math.max(0, totalDenominaciones(linea?.denominaciones) - (linea?.efectivo || 0))
+  }
   if (contextoConteo.value === 'ENTREGA') return entrega.importe
   return null
 })
 const denominacionesConteo = computed<DenominacionCantidad[]>(() => {
-  if (contextoConteo.value === 'LIQUIDACION' && itemConteoId.value) return seleccionados[itemConteoId.value]?.denominaciones || []
+  if (contextoConteo.value === 'RECIBIDO' && itemConteoId.value) return seleccionados[itemConteoId.value]?.denominaciones || []
+  if (contextoConteo.value === 'VUELTO' && itemConteoId.value) return seleccionados[itemConteoId.value]?.denominacionesVuelto || []
   if (contextoConteo.value === 'ENTREGA') return entrega.denominaciones || []
   return apertura.denominaciones || []
 })
-const tituloConteo = computed(() => contextoConteo.value === 'APERTURA' ? 'Apertura física de caja' : contextoConteo.value === 'ENTREGA' ? 'Billetes para entregar al banco' : 'Billetes recibidos en efectivo')
-const descripcionConteo = computed(() => contextoConteo.value === 'APERTURA' ? 'Registre el efectivo físico con el que inicia el control por denominaciones.' : 'La suma de los billetes debe coincidir exactamente con el efectivo indicado.')
+const tituloConteo = computed(() => contextoConteo.value === 'APERTURA' ? 'Apertura física de caja' : contextoConteo.value === 'ENTREGA' ? 'Billetes para entregar al banco' : contextoConteo.value === 'VUELTO' ? 'Billetes entregados como vuelto' : 'Billetes recibidos en efectivo')
+const descripcionConteo = computed(() => contextoConteo.value === 'APERTURA' ? 'Registre el efectivo físico con el que inicia el control por denominaciones.' : contextoConteo.value === 'RECIBIDO' ? 'Indique todo lo recibido del cliente. Si supera el importe cobrado, registre luego el vuelto.' : 'La suma de los billetes debe coincidir exactamente con el importe indicado.')
 const errorValidacion = computed(() => {
   for (const item of pendientes.value.filter(item => estaSeleccionado(item.itemSalidaId))) {
     const linea = seleccionados[item.itemSalidaId]
     const aplicado = linea.efectivo + linea.transferencia
     if (linea.efectivo < 0 || linea.transferencia < 0 || aplicado <= 0 || aplicado > item.saldoPendiente) return `El renglón ${item.numeroDocumento} debe liquidarse con un importe positivo que no exceda ${moneda(item.saldoPendiente)}.`
     if (linea.transferencia > 0 && !linea.referenciaBancaria.trim()) return `Indique la referencia bancaria para ${item.numeroDocumento}.`
-    if (linea.efectivo > 0 && !coincideDenominaciones(linea.efectivo, linea.denominaciones)) return `Cuadre los billetes recibidos en efectivo para ${item.numeroDocumento}.`
+    if (linea.efectivo > 0 && (totalDenominaciones(linea.denominaciones) < linea.efectivo || Math.abs(efectivoNetoRecibido(linea) - linea.efectivo) >= 0.005)) return `Registre los billetes recibidos y el vuelto para ${item.numeroDocumento}; el efectivo neto debe cuadrar.`
   }
   return ''
 })
 
 function alternar(item: ItemPendienteLiquidacion) {
   if (estaSeleccionado(item.itemSalidaId)) delete seleccionados[item.itemSalidaId]
-  else seleccionados[item.itemSalidaId] = { efectivo: item.saldoPendiente, transferencia: 0, referenciaBancaria: '', denominaciones: [] }
+  else seleccionados[item.itemSalidaId] = { efectivo: item.saldoPendiente, transferencia: 0, referenciaBancaria: '', denominaciones: [], denominacionesVuelto: [] }
 }
 
 function alternarTodos() {
@@ -251,7 +281,7 @@ function alternarTodos() {
     seleccionados[item.itemSalidaId] = {
       efectivo: item.saldoPendiente,
       transferencia: 0,
-      referenciaBancaria: '', denominaciones: []
+      referenciaBancaria: '', denominaciones: [], denominacionesVuelto: []
     }
   }
 }
@@ -261,6 +291,7 @@ function normalizar(id: string) {
   linea.efectivo = redondear(Math.max(0, linea.efectivo || 0))
   linea.transferencia = redondear(Math.max(0, linea.transferencia || 0))
   linea.denominaciones = []
+  linea.denominacionesVuelto = []
 }
 
 const moneda = (importe: number) => `$${(importe || 0).toLocaleString('es-CU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -324,9 +355,14 @@ async function registrarEntregaBanco() {
   } finally { registrandoEntrega.value = false }
 }
 
-function abrirConteoLiquidacion(itemSalidaId: string) {
+function abrirConteoRecibido(itemSalidaId: string) {
   itemConteoId.value = itemSalidaId
-  contextoConteo.value = 'LIQUIDACION'
+  contextoConteo.value = 'RECIBIDO'
+  mostrarConteo.value = true
+}
+function abrirConteoVuelto(itemSalidaId: string) {
+  itemConteoId.value = itemSalidaId
+  contextoConteo.value = 'VUELTO'
   mostrarConteo.value = true
 }
 function abrirConteoEntrega() {
@@ -341,7 +377,10 @@ function abrirConteoApertura() {
 }
 function cerrarConteo() { mostrarConteo.value = false; itemConteoId.value = null }
 function confirmarConteo(denominaciones: DenominacionCantidad[]) {
-  if (contextoConteo.value === 'LIQUIDACION' && itemConteoId.value) seleccionados[itemConteoId.value].denominaciones = denominaciones
+  if (contextoConteo.value === 'RECIBIDO' && itemConteoId.value) {
+    seleccionados[itemConteoId.value].denominaciones = denominaciones
+    seleccionados[itemConteoId.value].denominacionesVuelto = []
+  } else if (contextoConteo.value === 'VUELTO' && itemConteoId.value) seleccionados[itemConteoId.value].denominacionesVuelto = denominaciones
   else if (contextoConteo.value === 'ENTREGA') entrega.denominaciones = denominaciones
   else apertura.denominaciones = denominaciones
   cerrarConteo()
@@ -366,6 +405,24 @@ async function registrarApertura() {
   } finally { registrandoApertura.value = false }
 }
 
+async function registrarCambioBilletes(resultado: Omit<CambioDenominacionesRequest, 'fincaId'>) {
+  if (!fincaId.value) return
+  registrandoCambio.value = true
+  try {
+    await LiquidacionCajaService.cambiarDenominaciones({
+      ...resultado,
+      fincaId: fincaId.value,
+      fecha: resultado.fecha ? `${resultado.fecha}T00:00:00` : undefined
+    })
+    notify.success('Cambio registrado', 'La composición física de la caja fue actualizada.')
+    mostrarCambio.value = false
+    await cargarDatos()
+  } catch (error) {
+    console.error('Error registrando cambio de denominaciones', error)
+    notify.error('Error', 'No fue posible registrar el cambio de billetes.')
+  } finally { registrandoCambio.value = false }
+}
+
 onMounted(async () => {
   try {
     const response = await FincaService.buscarFincas({ size: 999 })
@@ -383,7 +440,7 @@ onMounted(async () => {
 .header-actions { display: flex; align-items: end; gap: .75rem; }.header-actions label { display: grid; color: #475569; font-size: .78rem; font-weight: 600; gap: .25rem; }.header-actions select { border: 1px solid #cbd5e1; border-radius: 6px; min-width: 220px; padding: .55rem; }
 .page-header { margin-bottom: 1.25rem; }.page-header h2, .section-title h3 { margin: 0; color: #1e3a5f; }.page-header p, .section-title p, small { color: #64748b; }.card { background: #fff; border: 1px solid #dbe4ea; border-radius: 10px; box-shadow: 0 1px 3px #0f172a0d; padding: 1.25rem; margin-bottom: 1.25rem; }
 .aviso { border-left: 4px solid #2563eb; background: #eff6ff; }.resumen-grid { align-items: stretch; }.resumen-grid .card { flex: 1; display: grid; gap: .35rem; }.saldo-card { border-left: 4px solid #16a34a; }.seleccion-card { border-left: 4px solid #7c3aed; }.resumen-grid strong { color: #0f3e74; font-size: 1.5rem; }
-.entrega-banco { background: #fffbeb; border-color: #fcd34d; }.entrega-form { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1.5fr auto auto; gap: .75rem; align-items: end; }.entrega-form label { display: grid; gap: .25rem; font-size: .8rem; font-weight: 600; }.entrega-form input, table input { border: 1px solid #cbd5e1; border-radius: 5px; padding: .5rem; min-width: 0; }.btn-primary, .btn-secondary, .btn-bank, .btn-count { border: 0; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600; padding: .6rem 1rem; }.btn-primary { background: #2563eb; }.btn-secondary { background: #475569; }.btn-bank { background: #b45309; white-space: nowrap; }.btn-count { background: #0f766e; white-space: nowrap; }.btn-count.mini { font-size: .7rem; padding: .35rem .45rem; }.btn-primary:disabled, .btn-secondary:disabled, .btn-bank:disabled, .btn-count:disabled { cursor: not-allowed; opacity: .55; }
+.entrega-banco { background: #fffbeb; border-color: #fcd34d; }.entrega-form { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1.5fr auto auto; gap: .75rem; align-items: end; }.entrega-form label { display: grid; gap: .25rem; font-size: .8rem; font-weight: 600; }.entrega-form input, table input { border: 1px solid #cbd5e1; border-radius: 5px; padding: .5rem; min-width: 0; }.btn-primary, .btn-secondary, .btn-bank, .btn-count { border: 0; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 600; padding: .6rem 1rem; }.btn-primary { background: #2563eb; }.btn-secondary { background: #475569; }.btn-bank { background: #b45309; white-space: nowrap; }.btn-count { background: #0f766e; white-space: nowrap; }.btn-count.vuelto { background: #a16207; }.btn-count.mini { font-size: .7rem; padding: .35rem .45rem; }.btn-primary:disabled, .btn-secondary:disabled, .btn-bank:disabled, .btn-count:disabled { cursor: not-allowed; opacity: .55; }
 .control-billetes { border-left: 4px solid #0f766e; }.apertura-actions { align-items: end; display: flex; flex-wrap: wrap; gap: .55rem; }.apertura-actions label { display: grid; font-size: .76rem; font-weight: 600; gap: .2rem; }.apertura-actions input { border: 1px solid #cbd5e1; border-radius: 5px; padding: .45rem; }.denominaciones-saldo { display: grid; gap: .55rem; grid-template-columns: repeat(6, minmax(105px, 1fr)); }.billete-saldo { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 6px; display: grid; gap: .15rem; padding: .55rem; }.billete-saldo span { color: #115e59; font-size: .75rem; font-weight: 700; }.billete-saldo strong { font-size: 1.1rem; }.billete-saldo small { font-size: .72rem; }.advertencia { background: #fff7ed; border-left: 4px solid #ea580c; color: #9a3412; margin: .75rem 0; padding: .65rem .8rem; }.efectivo-control { align-items: center; display: flex; gap: .35rem; }.efectivo-control input { max-width: 105px; }
 .pending-count { background: #e0e7ff; border-radius: 99px; color: #3730a3; font-size: .8rem; font-weight: 700; padding: .35rem .65rem; }.table-wrap { overflow-x: auto; }table { border-collapse: collapse; width: 100%; min-width: 1120px; font-size: .84rem; }th, td { border-bottom: 1px solid #e2e8f0; padding: .6rem; text-align: left; vertical-align: middle; }th { background: #f1f5f9; color: #334155; font-size: .72rem; text-transform: uppercase; }td small { display: block; font-size: .72rem; margin-top: .15rem; }.seleccionado { background: #eff6ff; }.tipo { background: #e0e7ff; border-radius: 3px; color: #3730a3; display: inline-block; font-size: .65rem; font-weight: 700; margin-right: .3rem; padding: .15rem .3rem; }.money { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }.error { color: #b91c1c; }.acciones { align-items: center; display: flex; justify-content: flex-end; margin-top: 1rem; }.validation-error { color: #b91c1c; margin-right: auto; }.empty { color: #64748b; padding: 2rem; text-align: center; }.empty.success { color: #15803d; }@media (max-width: 1100px) { .denominaciones-saldo { grid-template-columns: repeat(4, minmax(105px, 1fr)); } }@media (max-width: 950px) { .resumen-grid, .entrega-form { display: grid; grid-template-columns: 1fr; }.page-header, .section-title, .header-actions { flex-direction: column; }.btn-secondary { align-self: stretch; } }@media (max-width: 600px) { .denominaciones-saldo { grid-template-columns: repeat(2, minmax(105px, 1fr)); } }
 </style>
