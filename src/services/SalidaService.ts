@@ -96,7 +96,7 @@ class SalidaService {
     })
 
     const contentDisposition = response.headers['content-disposition']
-    let filename = `Vale_salida_${id}.pdf`
+    let filename = 'Vale_salida.pdf'
     if (contentDisposition) {
       const matches = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
       if (matches && matches[1]) {

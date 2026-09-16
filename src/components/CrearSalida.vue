@@ -17,6 +17,21 @@
         </div>
       </div>
 
+      <div class="form-row">
+        <div class="form-group">
+          <label>Almacén de salida *</label>
+          <select v-model="form.almacenFincaProductoId" class="form-select" required :disabled="!form.fincaProductoId || cargandoAlmacenes" @change="onAlmacenChange">
+            <option value="">{{ cargandoAlmacenes ? 'Cargando almacenes...' : 'Seleccione el almacén físico...' }}</option>
+            <option v-for="almacenProducto in almacenesProducto" :key="almacenProducto.id" :value="almacenProducto.id">
+              {{ almacenProducto.almacenNombre }} · disponible: {{ almacenProducto.stock }} {{ almacenProducto.unidadMedida || '' }}
+            </option>
+          </select>
+          <small v-if="form.fincaProductoId && !cargandoAlmacenes && almacenesProducto.length === 0" class="error-text">
+            El producto no está disponible en un almacén activo. Registre o transfiera existencias antes de emitir la salida.
+          </small>
+        </div>
+      </div>
+
       <!-- Destino y Tipo (auto-determinado) -->
       <div class="form-row">
         <div class="form-group">
@@ -81,6 +96,9 @@
         <div class="total-items">
           <strong>Total: {{ cantidadTotal }} unidades</strong>
         </div>
+        <small v-if="form.destino === 'TRABAJADORES' && !itemsValidos" class="error-text">
+          Seleccione un trabajador distinto en cada línea y una cantidad mayor que cero.
+        </small>
       </div>
 
       <!-- Observaciones -->
@@ -104,10 +122,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import SalidaService from '@/services/SalidaService'
 import FincaProductoService from '@/services/FincaProductoService'
+import AlmacenService from '@/services/AlmacenService'
 import TrabajadorService from '@/services/TrabajadorService'
 import { notify } from '@/composables/useNotification'
 import type { DestinoSalida, ItemSalida, CreateSalidaRequest } from '@/types/Salida'
 import { DESTINO_TIPO_MAP } from '@/types/Salida'
+import type { AlmacenFincaProducto } from '@/types/Almacen'
 
 interface FincaProducto {
   id: string
@@ -135,9 +155,12 @@ const isSubmitting = ref(false)
 const fincaProductos = ref<FincaProducto[]>([])
 const trabajadores = ref<Trabajador[]>([])
 const stockDisponible = ref<number | null>(null)
+const almacenesProducto = ref<AlmacenFincaProducto[]>([])
+const cargandoAlmacenes = ref(false)
 
 const form = ref({
   fincaProductoId: '',
+  almacenFincaProductoId: '',
   destino: 'TRABAJADORES' as DestinoSalida,
   observaciones: '',
   items: [{ trabajadorId: '', cantidad: 1, pagado: false }] as ItemSalida[]
@@ -150,9 +173,27 @@ const cantidadTotal = computed(() => {
   return form.value.items.reduce((sum, item) => sum + (item.cantidad || 0), 0)
 })
 
+const itemsValidos = computed(() => {
+  if (!form.value.items.length) return false
+  if (form.value.destino !== 'TRABAJADORES') {
+    return form.value.items.every(item => Number.isFinite(item.cantidad) && item.cantidad > 0)
+  }
+
+  const trabajadoresSeleccionados = new Set<string>()
+  return form.value.items.every(item => {
+    const trabajadorId = item.trabajadorId || ''
+    if (!trabajadorId || !Number.isFinite(item.cantidad) || item.cantidad <= 0 || trabajadoresSeleccionados.has(trabajadorId)) {
+      return false
+    }
+    trabajadoresSeleccionados.add(trabajadorId)
+    return true
+  })
+})
+
 const isFormValid = computed(() => {
   return form.value.fincaProductoId &&
-    form.value.items.length > 0 &&
+    form.value.almacenFincaProductoId &&
+    itemsValidos.value &&
     cantidadTotal.value > 0 &&
     cantidadTotal.value <= (stockDisponible.value || 0)
 })
@@ -184,9 +225,28 @@ const cargarTrabajadores = async () => {
   }
 }
 
-const onFincaProductoChange = () => {
+const onFincaProductoChange = async () => {
   const fp = fincaProductos.value.find(f => f.id === form.value.fincaProductoId)
-  stockDisponible.value = fp ? fp.stock : null
+  stockDisponible.value = null
+  form.value.almacenFincaProductoId = ''
+  almacenesProducto.value = []
+  if (!fp) return
+
+  cargandoAlmacenes.value = true
+  try {
+    const response = await AlmacenService.obtenerAlmacenesPorFincaProducto(fp.id)
+    almacenesProducto.value = (response.data || []).filter(item => item.activo)
+  } catch (error) {
+    console.error('Error cargando almacenes del producto:', error)
+    notify.error('Error', 'No se pudieron cargar los almacenes disponibles para la salida')
+  } finally {
+    cargandoAlmacenes.value = false
+  }
+}
+
+const onAlmacenChange = () => {
+  const almacenProducto = almacenesProducto.value.find(item => item.id === form.value.almacenFincaProductoId)
+  stockDisponible.value = almacenProducto?.stock ?? null
 }
 
 const agregarItem = () => {
@@ -205,6 +265,7 @@ const handleSubmit = async () => {
     const data: CreateSalidaRequest = {
       destino: form.value.destino,
       fincaProductoId: form.value.fincaProductoId,
+      almacenFincaProductoId: form.value.almacenFincaProductoId,
       observaciones: form.value.observaciones,
       items: form.value.items.map(item => ({
         trabajadorId: item.trabajadorId || '',
@@ -236,10 +297,12 @@ onMounted(() => {
   if (props.salida) {
     form.value = {
       fincaProductoId: props.salida.fincaProductoId,
+      almacenFincaProductoId: props.salida.almacenFincaProductoId || '',
       destino: props.salida.destino,
       observaciones: props.salida.observaciones || '',
       items: props.salida.items || [{ trabajadorId: '', cantidad: 1, pagado: false }]
     }
+    onFincaProductoChange()
   }
 })
 

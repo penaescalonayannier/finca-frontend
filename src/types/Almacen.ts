@@ -70,6 +70,8 @@ export interface EntradaAlmacenRequest {
   tipo: TipoMovimientoStock
   descripcion?: string
   numeroFactura?: string
+  /** Número del conduce de recepción cuando el tipo es ENTRADA_CONDUCE. */
+  numeroConduce?: string
 }
 
 /**
@@ -83,20 +85,15 @@ export interface EntradaProduccionAlmacenRequest {
   trabajadorEntregaId: string
   trabajadorRecibeId: string
   observaciones?: string
+  lote?: string
+  centroCosto?: string
+  costoUnitario?: number
 }
 
 export interface EntradaProduccionAlmacenResponse {
   produccionTerminadaId: string
   almacenFincaProductoId: string
   stockNuevo: number
-}
-
-export interface SalidaAlmacenRequest {
-  almacenFincaProductoId: string
-  cantidad: number
-  descripcion?: string
-  trabajadorId?: string
-  destino?: 'TRABAJADOR' | 'COMEDOR' | 'VENTA' | 'OTRO'
 }
 
 export interface LineaSalidaMultipleAlmacenRequest {

@@ -9,7 +9,6 @@ import type {
   EntradaAlmacenRequest,
   EntradaProduccionAlmacenRequest,
   EntradaProduccionAlmacenResponse,
-  SalidaAlmacenRequest,
   SalidaMultipleAlmacenRequest,
   SalidaMultipleAlmacenResponse,
   TransferenciaAlmacenRequest,
@@ -142,16 +141,8 @@ class AlmacenService {
     return axios.post(`${API_BASE_URL}/${almacenId}/entrada-produccion-terminada`, data)
   }
 
-  // ==================== SALIDAS ====================
-
-  /**
-   * Registrar salida de stock de un almacen
-   */
-  salidaStock(almacenId: string, data: SalidaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
-    return axios.post(`${API_BASE_URL}/${almacenId}/salida`, data)
-  }
-
-  /** Registra varias salidas del mismo almacén en una operación atómica. */
+  // ==================== SALIDAS DOCUMENTALES ====================
+  /** Registra una salida documental del almacén en una operación atómica. */
   salidaMultiple(almacenId: string, data: SalidaMultipleAlmacenRequest): Promise<AxiosResponse<SalidaMultipleAlmacenResponse>> {
     return axios.post(`${API_BASE_URL}/${almacenId}/salida-multiple`, data)
   }

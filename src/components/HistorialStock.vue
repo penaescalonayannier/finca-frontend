@@ -39,9 +39,17 @@
           <select v-model="filtroTipo" @change="buscarConReset" class="filter-select">
             <option value="">Todos</option>
             <option value="ENTRADA_PRODUCCION">Entrada Producción</option>
-            <option value="SALIDA_VENTA">Salida/Venta</option>
+            <option value="ENTRADA_FACTURA">Entrada por factura</option>
+            <option value="ENTRADA_CONDUCE">Entrada por conduce</option>
+            <option value="ENTRADA_AJUSTE">Ajuste de entrada</option>
+            <option value="SALIDA_VENTA">Salida / venta</option>
+            <option value="SALIDA_AUTOCONSUMO">Salida a trabajadores</option>
+            <option value="SALIDA_COMEDOR">Salida a comedor</option>
+            <option value="SALIDA_AJUSTE">Ajuste de salida</option>
+            <option value="TRANSFERENCIA_ENTRADA">Transferencia recibida</option>
+            <option value="TRANSFERENCIA_SALIDA">Transferencia enviada</option>
             <option value="DEVOLUCION">Devolución</option>
-            <option value="AJUSTE_MANUAL">Ajuste Manual</option>
+            <option value="AJUSTE_MANUAL">Ajuste manual</option>
             <option value="STOCK_INICIAL">Stock Inicial</option>
             <option value="AJUSTE_EDICION">Ajuste Edición</option>
           </select>
@@ -89,6 +97,7 @@
           <tr>
             <th>Tipo</th>
             <th>Finca</th>
+            <th>Almacén</th>
             <th>Producto</th>
             <th>Cantidad</th>
             <th>Stock Ant.</th>
@@ -107,6 +116,10 @@
             </td>
             <td>
               <span class="finca-name">{{ mov.fincaNombre || 'N/A' }}</span>
+            </td>
+            <td>
+              <span class="finca-name">{{ mov.almacenNombre || 'Sin almacén' }}</span>
+              <span v-if="mov.almacenInventario" class="subtext">{{ mov.almacenInventario }}</span>
             </td>
             <td>
               <span class="producto-name">{{ mov.productoNombre || 'N/A' }}</span>
@@ -154,7 +167,7 @@
 import { ref, computed, onMounted } from 'vue'
 import MovimientoStockService from '@/services/MovimientoStockService'
 import FincaService from '@/services/FincaService'
-import type { MovimientoStock, TipoMovimientoStock } from '@/types/MovimientoStock'
+import { TIPO_MOVIMIENTO_LABELS, type MovimientoStock, type TipoMovimientoStock } from '@/types/MovimientoStock'
 import type { Finca } from '@/types/Finca'
 import type { SearchFilter } from '@/types/EstadoCuenta'
 import jsPDF from 'jspdf'
@@ -172,44 +185,41 @@ const isLoading = ref(false)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
 
-const totalEntradas = computed(() =>
-  movimientos.value.filter(m => m.tipo === 'ENTRADA_PRODUCCION' || m.tipo === 'DEVOLUCION' || m.tipo === 'STOCK_INICIAL').length
-)
-const totalSalidas = computed(() =>
-  movimientos.value.filter(m => m.tipo === 'SALIDA_VENTA').length
-)
+const TIPOS_ENTRADA: TipoMovimientoStock[] = [
+  'ENTRADA_PRODUCCION', 'ENTRADA_FACTURA', 'ENTRADA_CONDUCE', 'ENTRADA_AJUSTE',
+  'TRANSFERENCIA_ENTRADA', 'DEVOLUCION', 'STOCK_INICIAL'
+]
+const TIPOS_SALIDA: TipoMovimientoStock[] = [
+  'SALIDA_VENTA', 'SALIDA_AUTOCONSUMO', 'SALIDA_COMEDOR', 'SALIDA_AJUSTE',
+  'TRANSFERENCIA_SALIDA', 'REVERSION_PRODUCCION', 'REVERSION_SALIDA'
+]
+const totalEntradas = computed(() => movimientos.value.filter(m => TIPOS_ENTRADA.includes(m.tipo)).length)
+const totalSalidas = computed(() => movimientos.value.filter(m => TIPOS_SALIDA.includes(m.tipo)).length)
 const totalAjustes = computed(() =>
-  movimientos.value.filter(m => m.tipo === 'AJUSTE_MANUAL' || m.tipo === 'AJUSTE_EDICION').length
+  movimientos.value.filter(m => m.tipo === 'ENTRADA_AJUSTE' || m.tipo === 'SALIDA_AJUSTE' || m.tipo === 'AJUSTE_MANUAL' || m.tipo === 'AJUSTE_EDICION').length
 )
 
-const TIPO_LABELS: Record<TipoMovimientoStock, string> = {
-  ENTRADA_PRODUCCION: 'Entrada',
-  SALIDA_VENTA: 'Salida',
-  DEVOLUCION: 'Devolución',
-  AJUSTE_MANUAL: 'Ajuste Manual',
-  STOCK_INICIAL: 'Stock Inicial',
-  AJUSTE_EDICION: 'Ajuste Edición'
-}
-
-const TIPO_ICONS: Record<TipoMovimientoStock, string> = {
-  ENTRADA_PRODUCCION: '📥',
-  SALIDA_VENTA: '📤',
-  DEVOLUCION: '↩️',
-  AJUSTE_MANUAL: '🔧',
-  STOCK_INICIAL: '🆕',
-  AJUSTE_EDICION: '✏️'
-}
-
-const getTipoLabel = (tipo: TipoMovimientoStock) => TIPO_LABELS[tipo] || tipo
-const getTipoIcon = (tipo: TipoMovimientoStock) => TIPO_ICONS[tipo] || '📦'
+const getTipoLabel = (tipo: TipoMovimientoStock) => TIPO_MOVIMIENTO_LABELS[tipo] || tipo
+const getTipoIcon = (tipo: TipoMovimientoStock) =>
+  TIPOS_ENTRADA.includes(tipo) ? '📥' : TIPOS_SALIDA.includes(tipo) ? '📤' : '🔧'
 
 const getTipoClass = (tipo: TipoMovimientoStock) => {
   switch (tipo) {
     case 'ENTRADA_PRODUCCION':
+    case 'ENTRADA_FACTURA':
+    case 'ENTRADA_CONDUCE':
+    case 'ENTRADA_AJUSTE':
+    case 'TRANSFERENCIA_ENTRADA':
     case 'DEVOLUCION':
     case 'STOCK_INICIAL':
       return 'entrada'
     case 'SALIDA_VENTA':
+    case 'SALIDA_AUTOCONSUMO':
+    case 'SALIDA_COMEDOR':
+    case 'SALIDA_AJUSTE':
+    case 'TRANSFERENCIA_SALIDA':
+    case 'REVERSION_PRODUCCION':
+    case 'REVERSION_SALIDA':
       return 'salida'
     default:
       return 'ajuste'
@@ -219,10 +229,20 @@ const getTipoClass = (tipo: TipoMovimientoStock) => {
 const getRowClass = (tipo: TipoMovimientoStock) => {
   switch (tipo) {
     case 'ENTRADA_PRODUCCION':
+    case 'ENTRADA_FACTURA':
+    case 'ENTRADA_CONDUCE':
+    case 'ENTRADA_AJUSTE':
+    case 'TRANSFERENCIA_ENTRADA':
     case 'DEVOLUCION':
     case 'STOCK_INICIAL':
       return 'row-entrada'
     case 'SALIDA_VENTA':
+    case 'SALIDA_AUTOCONSUMO':
+    case 'SALIDA_COMEDOR':
+    case 'SALIDA_AJUSTE':
+    case 'TRANSFERENCIA_SALIDA':
+    case 'REVERSION_PRODUCCION':
+    case 'REVERSION_SALIDA':
       return 'row-salida'
     default:
       return ''
@@ -338,6 +358,7 @@ const descargarPdf = () => {
   const tableData = movimientos.value.map((mov) => [
     getTipoLabel(mov.tipo),
     mov.fincaNombre || 'N/A',
+    mov.almacenNombre || 'Sin almacén',
     mov.productoNombre || 'N/A',
     (mov.cantidad >= 0 ? '+' : '') + mov.cantidad.toString(),
     mov.stockAnterior.toString(),
@@ -349,7 +370,7 @@ const descargarPdf = () => {
 
   autoTable(doc, {
     startY: 28,
-    head: [['Tipo', 'Finca', 'Producto', 'Cant.', 'Stock Ant.', 'Stock Nuevo', 'Ref.', 'Descripción', 'Fecha']],
+    head: [['Tipo', 'Finca', 'Almacén', 'Producto', 'Cant.', 'Stock Ant.', 'Stock Nuevo', 'Ref.', 'Descripción', 'Fecha']],
     body: tableData,
     theme: 'striped',
     headStyles: {

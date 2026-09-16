@@ -12,7 +12,6 @@ import TrabajadorList from '@/components/TrabajadorList.vue'
 import ProductoList from '@/components/ProductoList.vue'
 import FincaList from '@/components/FincaList.vue'
 import FincaProductoList from '@/components/FincaProductoList.vue'
-import EntradaProduccion from '@/components/EntradaProduccion.vue'
 import PrestamoList from '@/components/PrestamoList.vue'
 import TomaPrestamoList from '@/components/TomaPrestamoList.vue'
 import CamposList from '@/components/CamposList.vue'
@@ -59,6 +58,7 @@ import ArqueosCajaView from '@/views/ArqueosCajaView.vue'
 import CajaOficialView from '@/views/CajaOficialView.vue'
 import DocumentosCajaView from '@/views/DocumentosCajaView.vue'
 import BancoView from '@/views/BancoView.vue'
+import ConsecutivosDocumentalesView from '@/views/ConsecutivosDocumentalesView.vue'
 import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
 import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
 import EditarTipoReporte from '@/components/EditarTipoReporte.vue'
@@ -131,7 +131,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/entrada-produccion',
     name: 'EntradaProduccion',
-    component: EntradaProduccion
+    redirect: '/almacenes'
   },
   {
     path: '/prestamos',
@@ -381,6 +381,11 @@ const routes: RouteRecordRaw[] = [
     path: '/banco',
     name: 'Banco',
     component: BancoView
+  },
+  {
+    path: '/consecutivos-documentales',
+    name: 'ConsecutivosDocumentales',
+    component: ConsecutivosDocumentalesView
   },
   // Tipos de Reporte (nomenclador)
   {

@@ -211,61 +211,11 @@ const cargarProductosDeFinca = async () => {
 const registrarEntrada = async () => {
   if (!formValido.value) return
 
-  isRegistrando.value = true
-  mensaje.value = ''
-
-  try {
-    const response = await FincaProductoService.entradaProduccion({
-      fincaId: form.value.fincaId,
-      productoId: form.value.productoId,
-      cantidad: form.value.cantidad,
-      descripcion: form.value.descripcion,
-      centroCosto: form.value.centroCosto || undefined
-    })
-
-    const resultado = response.data
-    mensaje.value = resultado.mensaje || `Entrada de ${form.value.cantidad} unidades registrada correctamente`
-    mensajeTipo.value = 'success'
-
-    // Guardar en historial reciente
-    const finca = fincas.value.find(f => f.id === form.value.fincaId)
-    const producto = productosFinca.value.find(p => p.productoId === form.value.productoId)
-
-    entradasRecientes.value.unshift({
-      fincaName: finca?.name || 'N/A',
-      productoName: producto?.productoName || 'N/A',
-      cantidad: form.value.cantidad,
-      nuevoStock: resultado.nuevoStock
-    })
-
-    // Mantener solo las últimas 10 entradas
-    if (entradasRecientes.value.length > 10) {
-      entradasRecientes.value.pop()
-    }
-
-    // Actualizar el stock en la lista local
-    if (producto) {
-      producto.stock = resultado.nuevoStock
-    }
-
-    // Limpiar cantidad y descripción
-    form.value.cantidad = 1
-    form.value.descripcion = ''
-
-  } catch (error: unknown) {
-    console.error('Error al registrar entrada:', error)
-    const err = error as { response?: { data?: { message?: string, errorFields?: Array<{ message: string }> } } }
-    let errorMsg = 'Error al registrar la entrada'
-    if (err.response?.data?.errorFields?.[0]?.message) {
-      errorMsg = err.response.data.errorFields[0].message
-    } else if (err.response?.data?.message) {
-      errorMsg = err.response.data.message
-    }
-    mensaje.value = errorMsg
-    mensajeTipo.value = 'error'
-  } finally {
-    isRegistrando.value = false
-  }
+  // Este componente permanece únicamente por compatibilidad con enlaces
+  // antiguos. La ruta redirige a Almacenes: una producción debe identificar
+  // el almacén receptor y crear el documento de producción terminada.
+  mensaje.value = 'Registre la producción desde el almacén receptor para generar el documento y el movimiento físico en una sola operación.'
+  mensajeTipo.value = 'error'
 }
 
 const limpiarFormulario = () => {

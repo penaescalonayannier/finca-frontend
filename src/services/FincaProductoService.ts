@@ -5,10 +5,7 @@ import type {
   FincaProducto,
   FincaProductoResponse,
   AsignarProductoRequest,
-  ActualizarStockRequest,
   RemoverProductoRequest,
-  EntradaProduccionRequest,
-  EntradaProduccionResponse
 } from '@/types/FincaProducto'
 import type { SearchFilter, PagedResponse } from '@/types/EstadoCuenta'
 
@@ -31,20 +28,6 @@ class FincaProductoService {
    */
   asignarProductoAFinca(data: AsignarProductoRequest): Promise<AxiosResponse<{ id: string }>> {
     return axios.post(`${API_BASE_URL}/asignar`, data)
-  }
-
-  /**
-   * Actualizar stock de un producto en una finca
-   */
-  actualizarStock(data: ActualizarStockRequest): Promise<AxiosResponse<{ id: string }>> {
-    return axios.put(`${API_BASE_URL}/stock`, data)
-  }
-
-  /**
-   * Registrar entrada de producción (suma cantidad al stock existente)
-   */
-  entradaProduccion(data: EntradaProduccionRequest): Promise<AxiosResponse<EntradaProduccionResponse>> {
-    return axios.post(`${API_BASE_URL}/entrada-produccion`, data)
   }
 
   /**

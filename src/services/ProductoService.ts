@@ -89,9 +89,6 @@ class ProductoService {
     return axios.get(`${API_BASE_URL}/code/${code}`)
   }
 
-  actualizarStock(id: string, cantidad: number): Promise<AxiosResponse<Producto>> {
-    return axios.patch(`${API_BASE_URL}/${id}/stock`, { quantity: cantidad })
-  }
 }
 
 export default new ProductoService()

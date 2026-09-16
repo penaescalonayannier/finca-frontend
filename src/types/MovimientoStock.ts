@@ -34,6 +34,9 @@ export interface MovimientoStock {
   // Campos adicionales para mostrar
   fincaNombre?: string
   productoNombre?: string
+  almacenId?: string
+  almacenNombre?: string
+  almacenInventario?: string
 }
 
 export interface MovimientoStockResponse {

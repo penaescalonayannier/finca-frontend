@@ -34,12 +34,6 @@ export interface AsignarProductoRequest {
   stockMinimo?: number
 }
 
-export interface ActualizarStockRequest {
-  fincaId: string
-  productoId: string
-  stock: number
-}
-
 export interface RemoverProductoRequest {
   fincaId: string
   productoId: string
@@ -51,20 +45,4 @@ export interface FincaProductoResponse {
   totalPages: number
   currentPage: number
   pageSize: number
-}
-
-export interface EntradaProduccionRequest {
-  fincaId: string
-  productoId: string
-  cantidad: number
-  descripcion?: string
-  centroCosto?: string  // Código del centro de costo para contabilidad (ej: 700.01.04)
-}
-
-export interface EntradaProduccionResponse {
-  fincaId: string
-  productoId: string
-  cantidadAgregada: number
-  nuevoStock: number
-  mensaje: string
 }

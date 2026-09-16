@@ -103,7 +103,7 @@
 
         <div class="asiento-footer">
           <span v-if="asiento.movimientoStockId" class="movimiento-ref">
-            <i class="fas fa-link"></i> Movimiento: {{ asiento.movimientoStockId.substring(0, 8) }}...
+            <i class="fas fa-link"></i> Ref. técnica de movimiento: {{ asiento.movimientoStockId }}
           </span>
           <span v-if="asiento.fechaAsentado" class="fecha-asentado">
             Asentado: {{ formatDateTime(asiento.fechaAsentado) }} por {{ asiento.usuarioAsento }}

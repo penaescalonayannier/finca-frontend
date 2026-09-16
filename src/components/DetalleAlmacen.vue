@@ -302,6 +302,10 @@
           </div>
 
           <template v-if="entradaForm.tipo === 'ENTRADA_PRODUCCION'">
+            <div class="control-documental-info">
+              <strong>Documento de producción terminada</strong>
+              <span>Al confirmar se crea el documento de producción y su entrada al almacén en una sola operación.</span>
+            </div>
             <div class="producto-seleccionado">
               <span><strong>Finca:</strong> {{ almacen?.fincaName || '-' }}</span>
               <span><strong>Producto:</strong> {{ productoOperacion?.productoName || '-' }}</span>
@@ -310,6 +314,23 @@
             <div class="form-group">
               <label>Cantidad terminada *</label>
               <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad producida" />
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Lote / partida</label>
+                <input v-model.trim="entradaForm.lote" type="text" class="form-control" placeholder="Ej.: Lote C-09" />
+              </div>
+              <div class="form-group">
+                <label>Centro de costo</label>
+                <input v-model.trim="entradaForm.centroCosto" type="text" class="form-control" placeholder="Ej.: 700.01" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Costo unitario</label>
+              <input v-model.number="entradaForm.costoUnitario" type="number" min="0" step="0.01" class="form-control" placeholder="Opcional; CUP" />
+              <small class="form-help">Se conserva como referencia de costo del documento de producción terminada.</small>
             </div>
 
             <div class="form-group">
@@ -348,12 +369,19 @@
             </div>
 
             <div v-if="entradaForm.tipo === 'ENTRADA_FACTURA'" class="form-group">
-              <label>Número de Factura</label>
-              <input v-model="entradaForm.numeroFactura" type="text" class="form-control" placeholder="Ej: FAC-001" />
+              <label>Número de Factura *</label>
+              <input v-model.trim="entradaForm.numeroFactura" type="text" class="form-control" placeholder="Ej: FAC-001" required />
+              <small class="form-help">Es el documento fuente que respalda esta recepción.</small>
+            </div>
+
+            <div v-if="entradaForm.tipo === 'ENTRADA_CONDUCE'" class="form-group">
+              <label>Número de Conduce *</label>
+              <input v-model.trim="entradaForm.numeroConduce" type="text" class="form-control" placeholder="Ej: CON-001" required />
+              <small class="form-help">El número se conservará en la descripción del movimiento para su trazabilidad.</small>
             </div>
 
             <div class="form-group">
-              <label>Descripción</label>
+              <label>Descripción {{ entradaForm.tipo === 'ENTRADA_CONDUCE' ? '/ motivo de recepción' : '' }}</label>
               <textarea v-model="entradaForm.descripcion" class="form-control" rows="2" placeholder="Descripción opcional..."></textarea>
             </div>
           </template>
@@ -486,6 +514,9 @@
               <div class="total-items">
                 <strong>Total: {{ cantidadTotalSalida }} unidades</strong>
               </div>
+              <small v-if="salidaForm.destino === 'TRABAJADORES' && !itemsSalidaValidos" class="error-text">
+                Seleccione un trabajador distinto en cada línea y una cantidad mayor que cero.
+              </small>
             </div>
           </div>
 
@@ -732,6 +763,7 @@ import { DESTINO_TIPO_MAP } from '@/types/Salida'
 interface Trabajador {
   id: string
   nombre: string
+  fincaId?: string
 }
 
 const props = defineProps<{
@@ -803,13 +835,7 @@ const puedeAvanzarPaso = computed(() => {
   }
   if (salidaStep.value === 2) {
     const stock = productoOperacion.value?.stock || 0
-    const itemsValidos = salidaForm.items.every(item => {
-      if (salidaForm.destino === 'TRABAJADORES') {
-        return item.trabajadorId && item.cantidad > 0
-      }
-      return item.cantidad > 0
-    })
-    return itemsValidos && cantidadTotalSalida.value > 0 && cantidadTotalSalida.value <= stock
+    return itemsSalidaValidos.value && cantidadTotalSalida.value > 0 && cantidadTotalSalida.value <= stock
   }
   return true
 })
@@ -825,7 +851,11 @@ const entradaForm = reactive({
   tipo: 'ENTRADA_PRODUCCION' as TipoMovimientoStock,
   cantidad: 0,
   numeroFactura: '',
+  numeroConduce: '',
   descripcion: '',
+  lote: '',
+  centroCosto: '',
+  costoUnitario: undefined as number | undefined,
   trabajadorEntregaId: '',
   trabajadorRecibeId: ''
 })
@@ -842,7 +872,12 @@ const trabajadoresDeLaFinca = computed(() =>
 const esEntradaValida = computed(() => {
   if (!Number.isFinite(entradaForm.cantidad) || entradaForm.cantidad <= 0) return false
 
+  if (entradaForm.tipo === 'ENTRADA_FACTURA') return Boolean(entradaForm.numeroFactura.trim())
+  if (entradaForm.tipo === 'ENTRADA_CONDUCE') return Boolean(entradaForm.numeroConduce.trim())
   if (!esEntradaProduccion.value) return true
+
+  const costoUnitario = entradaForm.costoUnitario
+  if (costoUnitario !== undefined && (!Number.isFinite(costoUnitario) || costoUnitario < 0)) return false
 
   return Boolean(
     entradaForm.trabajadorEntregaId &&
@@ -880,9 +915,27 @@ const cantidadTotalSalida = computed(() => {
   return salidaForm.items.reduce((sum, item) => sum + (item.cantidad || 0), 0)
 })
 
+const itemsSalidaValidos = computed(() => {
+  if (salidaForm.items.length === 0) return false
+
+  if (salidaForm.destino !== 'TRABAJADORES') {
+    return salidaForm.items.every(item => Number.isFinite(item.cantidad) && item.cantidad > 0)
+  }
+
+  const trabajadoresSeleccionados = new Set<string>()
+  return salidaForm.items.every(item => {
+    const trabajadorId = item.trabajadorId || ''
+    if (!trabajadorId || !Number.isFinite(item.cantidad) || item.cantidad <= 0 || trabajadoresSeleccionados.has(trabajadorId)) {
+      return false
+    }
+    trabajadoresSeleccionados.add(trabajadorId)
+    return true
+  })
+})
+
 const isSalidaFormValid = computed(() => {
   const stock = productoOperacion.value?.stock || 0
-  return salidaForm.items.length > 0 &&
+  return itemsSalidaValidos.value &&
     cantidadTotalSalida.value > 0 &&
     cantidadTotalSalida.value <= stock
 })
@@ -1214,7 +1267,11 @@ const abrirModalEntrada = async (producto: AlmacenFincaProducto) => {
   entradaForm.tipo = 'ENTRADA_PRODUCCION'
   entradaForm.cantidad = 0
   entradaForm.numeroFactura = ''
+  entradaForm.numeroConduce = ''
   entradaForm.descripcion = ''
+  entradaForm.lote = ''
+  entradaForm.centroCosto = ''
+  entradaForm.costoUnitario = undefined
   entradaForm.trabajadorEntregaId = ''
   entradaForm.trabajadorRecibeId = ''
   mostrarModalEntrada.value = true
@@ -1237,7 +1294,10 @@ const ejecutarEntrada = async () => {
         cantidadTerminada: entradaForm.cantidad,
         trabajadorEntregaId: entradaForm.trabajadorEntregaId,
         trabajadorRecibeId: entradaForm.trabajadorRecibeId,
-        observaciones: entradaForm.descripcion
+        observaciones: entradaForm.descripcion,
+        lote: entradaForm.lote || undefined,
+        centroCosto: entradaForm.centroCosto || undefined,
+        costoUnitario: Number.isFinite(entradaForm.costoUnitario) ? entradaForm.costoUnitario : undefined
       })
       notify.success('Producción registrada', `Se registró la producción terminada y se agregaron ${entradaForm.cantidad} unidades`)
     } else {
@@ -1246,7 +1306,8 @@ const ejecutarEntrada = async () => {
         cantidad: entradaForm.cantidad,
         tipo: entradaForm.tipo,
         descripcion: entradaForm.descripcion,
-        numeroFactura: entradaForm.numeroFactura
+        numeroFactura: entradaForm.numeroFactura,
+        numeroConduce: entradaForm.numeroConduce
       })
       notify.success('Entrada registrada', `Se agregaron ${entradaForm.cantidad} unidades`)
     }
@@ -2356,6 +2417,26 @@ select.form-control {
 textarea.form-control {
   resize: vertical;
   min-height: 60px;
+}
+
+.form-help {
+  color: #64748b;
+  font-size: 0.82em;
+  margin-top: 5px;
+  display: block;
+}
+
+.control-documental-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 15px;
+  padding: 10px 12px;
+  border-left: 4px solid #27ae60;
+  border-radius: 5px;
+  color: #14532d;
+  background: #ecfdf5;
+  font-size: 0.88em;
 }
 
 .error-text {

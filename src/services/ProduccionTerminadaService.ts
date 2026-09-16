@@ -54,7 +54,7 @@ class ProduccionTerminadaService {
     const rawFilename = filenameMatch?.[1] || filenameMatch?.[2]
     const filename = rawFilename
       ? decodeURIComponent(rawFilename.replace(/["']/g, ''))
-      : `SC-2-06_Produccion_Terminada_${id}.pdf`
+      : 'SC-2-06_Produccion_Terminada.pdf'
 
     const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
     const link = document.createElement('a')

@@ -32,7 +32,7 @@
       
       <div class="button-group">
         <button @click="buscarConReset" class="btn-buscar">Buscar</button>
-        <button @click="abrirModalCrear" class="btn-crear">+ Nueva Produccion</button>
+        <button @click="abrirModalCrear" class="btn-crear">+ Nueva Producción</button>
       </div>
     </div>
 
@@ -46,6 +46,7 @@
           <th>Fecha</th>
           <th>Finca</th>
           <th>Producto</th>
+          <th>Almacén receptor</th>
           <th>Cantidad</th>
           <th>Entrega</th>
           <th>Recibe</th>
@@ -55,7 +56,7 @@
       </thead>
       <tbody>
         <tr v-if="registros.length === 0">
-          <td colspan="8" class="no-data">No se encontraron registros</td>
+          <td colspan="9" class="no-data">No se encontraron registros</td>
         </tr>
         <tr v-for="registro in registros" :key="registro.id">
           <td>{{ formatFecha(registro.fecha) }}</td>
@@ -67,6 +68,7 @@
             <strong>{{ registro.productoCode }}</strong>
             <span class="subtext">{{ registro.productoName }}</span>
           </td>
+          <td>{{ registro.almacenNombre || '-' }}</td>
           <td class="cantidad-cell">{{ registro.cantidadTerminada }}</td>
           <td>{{ registro.trabajadorEntregaNombre }}</td>
           <td>{{ registro.trabajadorRecibeNombre }}</td>
@@ -81,7 +83,7 @@
               {{ produccionDescargandoId === registro.id ? 'Generando...' : 'PDF SC-2-06' }}
             </button>
             <button @click="editarRegistro(registro)" class="btn-editar">Editar</button>
-            <button @click="confirmarEliminar(registro)" class="btn-eliminar">Eliminar</button>
+            <button @click="confirmarEliminar(registro)" class="btn-eliminar">Anular</button>
           </td>
         </tr>
       </tbody>
@@ -121,7 +123,7 @@
         <form @submit.prevent="guardarRegistro">
           <div class="form-group">
             <label>Finca *</label>
-            <select v-model="form.fincaId" required class="form-select">
+            <select v-model="form.fincaId" required class="form-select" :disabled="modoEdicion" @change="cargarAlmacenesProducto">
               <option value="">Seleccione una finca</option>
               <option v-for="finca in fincas" :key="finca.id" :value="finca.id">
                 {{ finca.code }} - {{ finca.name }}
@@ -131,12 +133,23 @@
 
           <div class="form-group">
             <label>Producto *</label>
-            <select v-model="form.productoId" required class="form-select">
+            <select v-model="form.productoId" required class="form-select" :disabled="modoEdicion || !form.fincaId" @change="cargarAlmacenesProducto">
               <option value="">Seleccione un producto</option>
               <option v-for="producto in productos" :key="producto.id" :value="producto.id">
                 {{ producto.code }} - {{ producto.name }}
               </option>
             </select>
+          </div>
+
+          <div class="form-group">
+            <label>Almacén que recibe la producción *</label>
+            <select v-model="form.almacenFincaProductoId" required class="form-select" :disabled="modoEdicion || cargandoAlmacenes || !form.productoId">
+              <option value="">{{ cargandoAlmacenes ? 'Cargando almacenes...' : 'Seleccione el almacén receptor' }}</option>
+              <option v-for="almacenProducto in almacenesProducto" :key="almacenProducto.id" :value="almacenProducto.id">
+                {{ almacenProducto.almacenNombre }} · existencias: {{ almacenProducto.stock }} {{ almacenProducto.unidadMedida || '' }}
+              </option>
+            </select>
+            <small class="field-help">La producción terminada y la entrada física se registran juntas en este almacén.</small>
           </div>
 
           <div class="form-group">
@@ -156,7 +169,7 @@
             <label>Trabajador que Entrega *</label>
             <select v-model="form.trabajadorEntregaId" required class="form-select">
               <option value="">Seleccione trabajador</option>
-              <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
+              <option v-for="trabajador in trabajadoresDeLaFinca" :key="trabajador.id" :value="trabajador.id">
                 {{ trabajador.nombre }}
               </option>
             </select>
@@ -166,10 +179,26 @@
             <label>Trabajador que Recibe *</label>
             <select v-model="form.trabajadorRecibeId" required class="form-select">
               <option value="">Seleccione trabajador</option>
-              <option v-for="trabajador in trabajadores" :key="trabajador.id" :value="trabajador.id">
+              <option v-for="trabajador in trabajadoresDeLaFinca" :key="trabajador.id" :value="trabajador.id">
                 {{ trabajador.nombre }}
               </option>
             </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Lote / partida</label>
+              <input v-model.trim="form.lote" type="text" class="form-input" placeholder="Ej.: Lote C-09">
+            </div>
+            <div class="form-group">
+              <label>Centro de costo</label>
+              <input v-model.trim="form.centroCosto" type="text" class="form-input" placeholder="Ej.: 700.01">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Costo unitario</label>
+            <input v-model.number="form.costoUnitario" type="number" min="0" step="0.01" class="form-input" placeholder="Opcional; CUP">
           </div>
 
           <div class="form-group">
@@ -199,15 +228,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import ProduccionTerminadaService from '@/services/ProduccionTerminadaService'
 import ProductoService from '@/services/ProductoService'
 import TrabajadorService from '@/services/TrabajadorService'
 import FincaService from '@/services/FincaService'
+import FincaProductoService from '@/services/FincaProductoService'
+import AlmacenService from '@/services/AlmacenService'
 import type { ProduccionTerminada } from '@/types/ProduccionTerminada'
 import type { Producto } from '@/types/Producto'
 import type { Trabajador } from '@/types/Trabajador'
 import type { Finca } from '@/types/Finca'
 import type { SearchFilter } from '@/types/EstadoCuenta'
+import type { AlmacenFincaProducto } from '@/types/Almacen'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 
@@ -226,6 +259,9 @@ const totalElementos = ref(0)
 const filtroProducto = ref('')
 const filtroFinca = ref('')
 const mensajeError = ref('')
+const almacenesProducto = ref<AlmacenFincaProducto[]>([])
+const cargandoAlmacenes = ref(false)
+const router = useRouter()
 
 // Modales
 const mostrarModal = ref(false)
@@ -236,14 +272,21 @@ const form = ref({
   id: '',
   fincaId: '',
   productoId: '',
+  almacenFincaProductoId: '',
   cantidadTerminada: 1,
   trabajadorEntregaId: '',
   trabajadorRecibeId: '',
-  observaciones: ''
+  observaciones: '',
+  lote: '',
+  centroCosto: '',
+  costoUnitario: undefined as number | undefined
 })
 
 // Computed
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
+const trabajadoresDeLaFinca = computed(() =>
+  trabajadores.value.filter(trabajador => trabajador.fincaId === form.value.fincaId)
+)
 
 // Metodos
 const formatFecha = (fecha: string): string => {
@@ -337,18 +380,8 @@ const cambiarTamanoPagina = () => {
 
 // Modal Crear
 const abrirModalCrear = () => {
-  modoEdicion.value = false
-  form.value = {
-    id: '',
-    fincaId: '',
-    productoId: '',
-    cantidadTerminada: 1,
-    trabajadorEntregaId: '',
-    trabajadorRecibeId: '',
-    observaciones: ''
-  }
-  mensajeError.value = ''
-  mostrarModal.value = true
+  notify.info('Producción en almacén', 'Seleccione el almacén receptor y use Entrada → Producción para crear el documento y el movimiento físico juntos.')
+  router.push('/almacenes')
 }
 
 // Modal Editar
@@ -358,13 +391,35 @@ const editarRegistro = (registro: ProduccionTerminada) => {
     id: registro.id,
     fincaId: registro.fincaId,
     productoId: registro.productoId,
+    almacenFincaProductoId: registro.almacenFincaProductoId || '',
     cantidadTerminada: registro.cantidadTerminada,
     trabajadorEntregaId: registro.trabajadorEntregaId,
     trabajadorRecibeId: registro.trabajadorRecibeId,
-    observaciones: registro.observaciones || ''
+    observaciones: registro.observaciones || '',
+    lote: registro.lote || '',
+    centroCosto: registro.centroCosto || '',
+    costoUnitario: registro.costoUnitario
   }
   mensajeError.value = ''
   mostrarModal.value = true
+}
+
+const cargarAlmacenesProducto = async () => {
+  form.value.almacenFincaProductoId = ''
+  almacenesProducto.value = []
+  if (!form.value.fincaId || !form.value.productoId) return
+
+  cargandoAlmacenes.value = true
+  try {
+    const fincaProducto = await FincaProductoService.obtenerRelacion(form.value.fincaId, form.value.productoId)
+    const response = await AlmacenService.obtenerAlmacenesPorFincaProducto(fincaProducto.data.id)
+    almacenesProducto.value = (response.data || []).filter(item => item.activo)
+  } catch (error) {
+    console.error('Error al cargar almacenes para producción:', error)
+    mensajeError.value = 'No se pudieron cargar los almacenes de la finca para este producto.'
+  } finally {
+    cargandoAlmacenes.value = false
+  }
 }
 
 const cerrarModal = () => {
@@ -373,13 +428,27 @@ const cerrarModal = () => {
 }
 
 const guardarRegistro = async () => {
-  if (!form.value.fincaId || !form.value.productoId || !form.value.trabajadorEntregaId || !form.value.trabajadorRecibeId) {
+  if (!modoEdicion.value) {
+    mensajeError.value = 'Las nuevas producciones se registran desde el almacén receptor.'
+    return
+  }
+  if (!form.value.fincaId || !form.value.productoId || !form.value.almacenFincaProductoId || !form.value.trabajadorEntregaId || !form.value.trabajadorRecibeId) {
     mensajeError.value = 'Complete todos los campos requeridos'
     return
   }
 
   if (form.value.trabajadorEntregaId === form.value.trabajadorRecibeId) {
     mensajeError.value = 'El trabajador que entrega y recibe deben ser diferentes'
+    return
+  }
+
+  if (!Number.isFinite(form.value.cantidadTerminada) || form.value.cantidadTerminada <= 0) {
+    mensajeError.value = 'La cantidad terminada debe ser mayor que cero'
+    return
+  }
+
+  if (form.value.costoUnitario !== undefined && (!Number.isFinite(form.value.costoUnitario) || form.value.costoUnitario < 0)) {
+    mensajeError.value = 'El costo unitario no puede ser negativo'
     return
   }
 
@@ -392,19 +461,14 @@ const guardarRegistro = async () => {
         id: form.value.id,
         fincaId: form.value.fincaId,
         productoId: form.value.productoId,
+        almacenFincaProductoId: form.value.almacenFincaProductoId,
         cantidadTerminada: form.value.cantidadTerminada,
         trabajadorEntregaId: form.value.trabajadorEntregaId,
         trabajadorRecibeId: form.value.trabajadorRecibeId,
-        observaciones: form.value.observaciones
-      })
-    } else {
-      await ProduccionTerminadaService.create({
-        fincaId: form.value.fincaId,
-        productoId: form.value.productoId,
-        cantidadTerminada: form.value.cantidadTerminada,
-        trabajadorEntregaId: form.value.trabajadorEntregaId,
-        trabajadorRecibeId: form.value.trabajadorRecibeId,
-        observaciones: form.value.observaciones
+        observaciones: form.value.observaciones,
+        lote: form.value.lote || undefined,
+        centroCosto: form.value.centroCosto || undefined,
+        costoUnitario: Number.isFinite(form.value.costoUnitario) ? form.value.costoUnitario : undefined
       })
     }
     cerrarModal()

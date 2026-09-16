@@ -51,8 +51,8 @@
             <i class="fa-solid fa-chevron-right arrow" :class="{ 'open': openGroups.includes('operaciones') }"></i>
           </button>
           <div class="nav-group-items" :class="{ 'open': openGroups.includes('operaciones') }">
-            <router-link to="/entrada-produccion" class="nav-item sub" @click="closeMobileMenu">
-              <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrada Producción
+            <router-link to="/almacenes" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-arrow-right-to-bracket"></i> Entrada de Producción (Almacén)
             </router-link>
             <router-link to="/produccion-terminada" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-circle-check"></i> Producción Terminada
@@ -207,6 +207,9 @@
             </router-link>
             <router-link to="/banco" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-building-columns"></i> Banco y Conciliación
+            </router-link>
+            <router-link to="/consecutivos-documentales" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-list-ol"></i> Consecutivos documentales
             </router-link>
             <router-link to="/reportes/ventas-pagos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-receipt"></i> Resumen Ventas/Pagos

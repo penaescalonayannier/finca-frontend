@@ -146,8 +146,11 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label>Stock Inicial</label>
-            <input v-model.number="formAsignar.stock" type="number" min="0" step="0.0001" class="form-input" placeholder="0.0000" />
+            <label>Stock inicial</label>
+            <div class="stock-inicial-controlado">
+              0 · Se registra posteriormente en un almacén físico.
+            </div>
+            <small class="field-help">Para preservar trazabilidad, asigne el producto y luego agregue sus existencias al almacén correspondiente.</small>
           </div>
           <div class="form-group">
             <label>Stock Mínimo</label>
@@ -436,6 +439,11 @@ const cerrarModalAsignar = () => {
 const asignarProducto = async () => {
   if (!formAsignar.value.fincaId || !formAsignar.value.productoId) {
     notify.warning('Campos requeridos', 'Debe seleccionar una finca y un producto')
+    return
+  }
+
+  if (formAsignar.value.stock > 0) {
+    notify.warning('Stock por almacén', 'El stock inicial debe registrarse en un almacén físico, no directamente en el producto de la finca.')
     return
   }
 
@@ -1331,6 +1339,15 @@ h2 {
   font-size: 0.75em;
   color: #888;
   margin-top: 4px;
+}
+
+.stock-inicial-controlado {
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-weight: 600;
 }
 
 .form-actions {
