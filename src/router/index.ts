@@ -55,6 +55,7 @@ import DepreciacionView from '@/components/DepreciacionView.vue'
 import GrupoActivoFijoList from '@/components/GrupoActivoFijoList.vue'
 import ReporteConsolidadoMovimientos from '@/views/ReporteConsolidadoMovimientos.vue'
 import LiquidacionCajaView from '@/views/LiquidacionCajaView.vue'
+import ArqueosCajaView from '@/views/ArqueosCajaView.vue'
 import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
 import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
 import EditarTipoReporte from '@/components/EditarTipoReporte.vue'
@@ -357,6 +358,11 @@ const routes: RouteRecordRaw[] = [
     path: '/liquidacion-caja',
     name: 'LiquidacionCaja',
     component: LiquidacionCajaView
+  },
+  {
+    path: '/arqueos-caja',
+    name: 'ArqueosCaja',
+    component: ArqueosCajaView
   },
   // Tipos de Reporte (nomenclador)
   {

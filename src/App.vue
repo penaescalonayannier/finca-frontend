@@ -196,6 +196,9 @@
             <router-link to="/liquidacion-caja" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-cash-register"></i> Liquidación / Caja
             </router-link>
+            <router-link to="/arqueos-caja" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-magnifying-glass-dollar"></i> Arqueos de Caja
+            </router-link>
             <router-link to="/reportes/ventas-pagos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-receipt"></i> Resumen Ventas/Pagos
             </router-link>
