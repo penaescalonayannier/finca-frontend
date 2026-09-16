@@ -7,6 +7,8 @@ import type {
   AlmacenProductoRequest,
   AlmacenFincaProducto,
   EntradaAlmacenRequest,
+  EntradaProduccionAlmacenRequest,
+  EntradaProduccionAlmacenResponse,
   SalidaAlmacenRequest,
   SalidaMultipleAlmacenRequest,
   SalidaMultipleAlmacenResponse,
@@ -131,6 +133,13 @@ class AlmacenService {
    */
   entradaStock(almacenId: string, data: EntradaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
     return axios.post(`${API_BASE_URL}/${almacenId}/entrada`, data)
+  }
+
+  /**
+   * Registra una producción terminada y su entrada al almacén de forma atómica.
+   */
+  entradaPorProduccion(almacenId: string, data: EntradaProduccionAlmacenRequest): Promise<AxiosResponse<EntradaProduccionAlmacenResponse>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/entrada-produccion-terminada`, data)
   }
 
   // ==================== SALIDAS ====================

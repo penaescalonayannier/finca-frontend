@@ -72,6 +72,25 @@ export interface EntradaAlmacenRequest {
   numeroFactura?: string
 }
 
+/**
+ * Datos de una entrada originada por producción terminada. El backend crea
+ * tanto el documento de producción como el movimiento de entrada en una sola
+ * operación para que no puedan quedar registros desincronizados.
+ */
+export interface EntradaProduccionAlmacenRequest {
+  almacenFincaProductoId: string
+  cantidadTerminada: number
+  trabajadorEntregaId: string
+  trabajadorRecibeId: string
+  observaciones?: string
+}
+
+export interface EntradaProduccionAlmacenResponse {
+  produccionTerminadaId: string
+  almacenFincaProductoId: string
+  stockNuevo: number
+}
+
 export interface SalidaAlmacenRequest {
   almacenFincaProductoId: string
   cantidad: number

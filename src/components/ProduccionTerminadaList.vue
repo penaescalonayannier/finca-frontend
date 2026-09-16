@@ -137,7 +137,8 @@
               v-model.number="form.cantidadTerminada"
               type="number"
               required
-              min="1"
+              min="0.0001"
+              step="0.0001"
               class="form-input"
               placeholder="0"
             />

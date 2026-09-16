@@ -244,24 +244,66 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label>Cantidad</label>
-            <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad a ingresar" />
-          </div>
+          <template v-if="entradaForm.tipo === 'ENTRADA_PRODUCCION'">
+            <div class="producto-seleccionado">
+              <span><strong>Finca:</strong> {{ almacen?.fincaName || '-' }}</span>
+              <span><strong>Producto:</strong> {{ productoOperacion?.productoName || '-' }}</span>
+            </div>
 
-          <div v-if="entradaForm.tipo === 'ENTRADA_FACTURA'" class="form-group">
-            <label>Número de Factura</label>
-            <input v-model="entradaForm.numeroFactura" type="text" class="form-control" placeholder="Ej: FAC-001" />
-          </div>
+            <div class="form-group">
+              <label>Cantidad terminada *</label>
+              <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad producida" />
+            </div>
 
-          <div class="form-group">
-            <label>Descripción</label>
-            <textarea v-model="entradaForm.descripcion" class="form-control" rows="2" placeholder="Descripción opcional..."></textarea>
-          </div>
+            <div class="form-group">
+              <label>Trabajador que entrega *</label>
+              <select v-model="entradaForm.trabajadorEntregaId" class="form-control">
+                <option value="">Seleccione...</option>
+                <option v-for="trabajador in trabajadoresDeLaFinca" :key="trabajador.id" :value="trabajador.id">
+                  {{ trabajador.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Trabajador que recibe *</label>
+              <select v-model="entradaForm.trabajadorRecibeId" class="form-control">
+                <option value="">Seleccione...</option>
+                <option v-for="trabajador in trabajadoresDeLaFinca" :key="trabajador.id" :value="trabajador.id">
+                  {{ trabajador.nombre }}
+                </option>
+              </select>
+              <small v-if="entradaForm.trabajadorEntregaId && entradaForm.trabajadorEntregaId === entradaForm.trabajadorRecibeId" class="error-text">
+                El trabajador que entrega y recibe deben ser diferentes.
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label>Observaciones</label>
+              <textarea v-model="entradaForm.descripcion" class="form-control" rows="2" placeholder="Observaciones opcionales..."></textarea>
+            </div>
+          </template>
+
+          <template v-else>
+            <div class="form-group">
+              <label>Cantidad</label>
+              <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad a ingresar" />
+            </div>
+
+            <div v-if="entradaForm.tipo === 'ENTRADA_FACTURA'" class="form-group">
+              <label>Número de Factura</label>
+              <input v-model="entradaForm.numeroFactura" type="text" class="form-control" placeholder="Ej: FAC-001" />
+            </div>
+
+            <div class="form-group">
+              <label>Descripción</label>
+              <textarea v-model="entradaForm.descripcion" class="form-control" rows="2" placeholder="Descripción opcional..."></textarea>
+            </div>
+          </template>
         </div>
         <div class="modal-footer">
           <button @click="cerrarModalEntrada" class="btn-cancelar">Cancelar</button>
-          <button @click="ejecutarEntrada" class="btn-confirmar btn-entrada-confirm" :disabled="!entradaForm.cantidad || procesando">
+          <button @click="ejecutarEntrada" class="btn-confirmar btn-entrada-confirm" :disabled="!esEntradaValida || procesando">
             {{ procesando ? 'Procesando...' : 'Registrar Entrada' }}
           </button>
         </div>
@@ -723,7 +765,30 @@ const entradaForm = reactive({
   tipo: 'ENTRADA_PRODUCCION' as TipoMovimientoStock,
   cantidad: 0,
   numeroFactura: '',
-  descripcion: ''
+  descripcion: '',
+  trabajadorEntregaId: '',
+  trabajadorRecibeId: ''
+})
+
+const esEntradaProduccion = computed(() => entradaForm.tipo === 'ENTRADA_PRODUCCION')
+
+// La producción solo puede ser entregada y recibida por trabajadores de la
+// misma finca del almacén. El backend también lo valida; este filtro evita que
+// el usuario pueda elegir una combinación que será rechazada al guardar.
+const trabajadoresDeLaFinca = computed(() =>
+  trabajadores.value.filter(trabajador => trabajador.fincaId === almacen.value?.fincaId)
+)
+
+const esEntradaValida = computed(() => {
+  if (!Number.isFinite(entradaForm.cantidad) || entradaForm.cantidad <= 0) return false
+
+  if (!esEntradaProduccion.value) return true
+
+  return Boolean(
+    entradaForm.trabajadorEntregaId &&
+    entradaForm.trabajadorRecibeId &&
+    entradaForm.trabajadorEntregaId !== entradaForm.trabajadorRecibeId
+  )
 })
 
 const salidaForm = reactive({
@@ -1025,13 +1090,16 @@ const confirmarRemover = async (producto: AlmacenFincaProducto) => {
 }
 
 // ==================== ENTRADA ====================
-const abrirModalEntrada = (producto: AlmacenFincaProducto) => {
+const abrirModalEntrada = async (producto: AlmacenFincaProducto) => {
   productoOperacion.value = producto
   entradaForm.tipo = 'ENTRADA_PRODUCCION'
   entradaForm.cantidad = 0
   entradaForm.numeroFactura = ''
   entradaForm.descripcion = ''
+  entradaForm.trabajadorEntregaId = ''
+  entradaForm.trabajadorRecibeId = ''
   mostrarModalEntrada.value = true
+  await cargarTrabajadores()
 }
 
 const cerrarModalEntrada = () => {
@@ -1040,18 +1108,29 @@ const cerrarModalEntrada = () => {
 }
 
 const ejecutarEntrada = async () => {
-  if (!productoOperacion.value || !almacen.value?.id || !entradaForm.cantidad) return
+  if (!productoOperacion.value || !almacen.value?.id || !esEntradaValida.value) return
 
   procesando.value = true
   try {
-    await AlmacenService.entradaStock(almacen.value.id, {
-      almacenFincaProductoId: productoOperacion.value.id,
-      cantidad: entradaForm.cantidad,
-      tipo: entradaForm.tipo,
-      descripcion: entradaForm.descripcion,
-      numeroFactura: entradaForm.numeroFactura
-    })
-    notify.success('Entrada registrada', `Se agregaron ${entradaForm.cantidad} unidades`)
+    if (esEntradaProduccion.value) {
+      await AlmacenService.entradaPorProduccion(almacen.value.id, {
+        almacenFincaProductoId: productoOperacion.value.id,
+        cantidadTerminada: entradaForm.cantidad,
+        trabajadorEntregaId: entradaForm.trabajadorEntregaId,
+        trabajadorRecibeId: entradaForm.trabajadorRecibeId,
+        observaciones: entradaForm.descripcion
+      })
+      notify.success('Producción registrada', `Se registró la producción terminada y se agregaron ${entradaForm.cantidad} unidades`)
+    } else {
+      await AlmacenService.entradaStock(almacen.value.id, {
+        almacenFincaProductoId: productoOperacion.value.id,
+        cantidad: entradaForm.cantidad,
+        tipo: entradaForm.tipo,
+        descripcion: entradaForm.descripcion,
+        numeroFactura: entradaForm.numeroFactura
+      })
+      notify.success('Entrada registrada', `Se agregaron ${entradaForm.cantidad} unidades`)
+    }
     cerrarModalEntrada()
     await cargarAlmacen()
     if (mostrarAsientos.value) {

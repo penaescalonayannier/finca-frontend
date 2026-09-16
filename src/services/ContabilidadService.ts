@@ -13,7 +13,8 @@ import type {
   TipoCuenta
 } from '@/types/Contabilidad'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9908'
+// El frontend se compila con Vue CLI, que expone las variables con process.env.
+const API_URL = process.env.VUE_APP_API_URL || 'http://localhost:9908'
 
 // ==================== CUENTAS CONTABLES ====================
 
