@@ -193,6 +193,9 @@
             <router-link to="/deudas-trabajadores" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-hand-holding-dollar"></i> Deudas y Pagos
             </router-link>
+            <router-link to="/liquidacion-caja" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-cash-register"></i> Liquidación / Caja
+            </router-link>
             <router-link to="/reportes/ventas-pagos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-receipt"></i> Resumen Ventas/Pagos
             </router-link>

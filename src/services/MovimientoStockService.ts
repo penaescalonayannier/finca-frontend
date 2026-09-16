@@ -227,14 +227,31 @@ export interface SalidaPorDestino {
  * Los documentos se incluyen en el consolidado para que el importe mostrado
  * pueda ser auditado desde el vale o la factura que lo originó.
  */
-export interface DocumentoEfectivo {
-  tipoDocumento: 'VALE' | 'FACTURA' | string
-  numeroDocumento: string
+export interface CobroEfectivoDetalle {
+  pagoDetalleId: string
   fecha: string
+  numeroRecibo: string
+  trabajadorNombre?: string
+  fincaNombre?: string
+  tipoDocumento?: string
+  numeroDocumento?: string
   destino?: string
-  referencia?: string
+  saldoDocumento?: number
+  estadoDocumento?: string
   importe: number
-  pagado?: boolean
+}
+
+/** Documento emitido; no es una confirmación de cobro. */
+export interface DocumentoOrigenEmitido {
+  salidaId: string
+  fecha: string
+  tipoDocumento: string
+  numeroDocumento: string
+  destino?: string
+  fincaNombre?: string
+  cantidad?: number
+  importeDocumentado: number
+  estadoCobro: string
 }
 
 export interface ReporteConsolidado {
@@ -245,10 +262,10 @@ export interface ReporteConsolidado {
   entradasPorProducto: EntradaPorProducto[]
   salidasPorDestino: SalidaPorDestino[]
   entradasPorTipo: Record<string, number>
-  /** Total efectivamente cobrado, respaldado por vales y facturas pagados. */
-  efectivoGenerado: number
-  /** Detalle documental que compone el efectivo generado. */
-  documentosEfectivo: DocumentoEfectivo[]
+  totalEfectivoCobrado: number
+  totalTransferenciasCobradas: number
+  cobrosEfectivo: CobroEfectivoDetalle[]
+  documentosOrigenEmitidos: DocumentoOrigenEmitido[]
 }
 
 export default new MovimientoStockService()

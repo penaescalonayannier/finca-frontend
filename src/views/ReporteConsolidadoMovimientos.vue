@@ -53,58 +53,94 @@
           <span class="stat-value">{{ balance >= 0 ? '+' : '' }}{{ balance.toLocaleString() }}</span>
         </div>
         <div class="stat efectivo">
-          <span class="stat-label">Efectivo generado</span>
-          <span class="stat-value">{{ formatCurrency(reporte.efectivoGenerado) }}</span>
-          <small>{{ documentosEfectivo.length }} documento{{ documentosEfectivo.length === 1 ? '' : 's' }} de respaldo</small>
+          <span class="stat-label">Efectivo cobrado</span>
+          <span class="stat-value">{{ formatCurrency(reporte.totalEfectivoCobrado) }}</span>
+          <small>{{ cobrosEfectivo.length }} cobro{{ cobrosEfectivo.length === 1 ? '' : 's' }} confirmado{{ cobrosEfectivo.length === 1 ? '' : 's' }}</small>
+        </div>
+        <div class="stat transferencia">
+          <span class="stat-label">Transferencias cobradas</span>
+          <span class="stat-value">{{ formatCurrency(reporte.totalTransferenciasCobradas) }}</span>
+          <small>Registradas mediante pagos confirmados</small>
         </div>
       </div>
     </div>
 
-    <!-- Cobros con trazabilidad documental -->
+    <!-- Los pagos confirmados y los documentos emitidos no se mezclan. -->
     <div v-if="reporte" class="seccion card seccion-efectivo">
       <div class="seccion-header">
         <div>
-          <h3>Efectivo generado</h3>
-          <p>Importes cobrados en efectivo durante el período, identificados por su vale o factura de origen.</p>
+          <h3>Cobros en efectivo confirmados</h3>
+          <p>Solo los detalles de pago registrados como efectivo se suman a caja. Un vale o factura emitida no equivale a efectivo cobrado.</p>
         </div>
-        <span class="total-efectivo">{{ formatCurrency(reporte.efectivoGenerado) }}</span>
+        <span class="total-efectivo">{{ formatCurrency(reporte.totalEfectivoCobrado) }}</span>
       </div>
-      <div v-if="documentosEfectivo.length" class="tabla-container">
+      <div v-if="cobrosEfectivo.length" class="tabla-container">
         <table class="tabla-efectivo">
           <thead>
             <tr>
+              <th>Fecha</th>
+              <th>Liquidación</th>
               <th>Tipo</th>
               <th>Documento</th>
-              <th>Fecha</th>
               <th>Destino</th>
-              <th>Concepto / referencia</th>
+              <th>Trabajador</th>
+              <th>Finca</th>
               <th>Estado</th>
+              <th class="importe">Saldo documento</th>
               <th class="importe">Importe</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(documento, index) in documentosEfectivo" :key="`${documento.tipoDocumento}-${documento.numeroDocumento}-${documento.fecha}-${index}`">
-              <td><span class="documento-tipo" :class="getTipoDocumentoClass(documento.tipoDocumento)">{{ documento.tipoDocumento }}</span></td>
-              <td class="numero-documento">{{ documento.numeroDocumento }}</td>
-              <td>{{ formatDate(documento.fecha) }}</td>
-              <td>{{ documento.destino || '—' }}</td>
-              <td>{{ documento.referencia || '—' }}</td>
-              <td><span class="estado-cobro" :class="{ pendiente: documento.pagado === false }">{{ documento.pagado === false ? 'Pendiente' : 'Cobrado' }}</span></td>
-              <td class="importe">{{ formatCurrency(documento.importe) }}</td>
+            <tr v-for="cobro in cobrosEfectivo" :key="cobro.pagoDetalleId">
+              <td>{{ formatDate(cobro.fecha) }}</td>
+              <td class="numero-documento">{{ cobro.numeroRecibo || '—' }}</td>
+              <td><span class="documento-tipo" :class="getTipoDocumentoClass(cobro.tipoDocumento)">{{ cobro.tipoDocumento || '—' }}</span></td>
+              <td class="numero-documento">{{ cobro.numeroDocumento || '—' }}</td>
+              <td>{{ cobro.destino || '—' }}</td>
+              <td>{{ cobro.trabajadorNombre || '—' }}</td>
+              <td>{{ cobro.fincaNombre || '—' }}</td>
+              <td><span class="estado-cobro" :class="{ pendiente: cobro.estadoDocumento === 'PARCIAL' }">{{ cobro.estadoDocumento || '—' }}</span></td>
+              <td class="importe">{{ formatCurrency(cobro.saldoDocumento) }}</td>
+              <td class="importe">{{ formatCurrency(cobro.importe) }}</td>
             </tr>
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="6"><strong>TOTAL EFECTIVO GENERADO</strong></td>
-              <td class="importe"><strong>{{ formatCurrency(reporte.efectivoGenerado) }}</strong></td>
+              <td colspan="9"><strong>TOTAL EFECTIVO COBRADO</strong></td>
+              <td class="importe"><strong>{{ formatCurrency(reporte.totalEfectivoCobrado) }}</strong></td>
             </tr>
           </tfoot>
         </table>
       </div>
       <div v-else class="sin-efectivo">
-        No se registraron cobros en efectivo mediante vales o facturas en el período seleccionado.
+        No se registraron cobros confirmados en efectivo en el período seleccionado.
       </div>
-      <p class="nota-pdf">El botón “Descargar PDF detallado” incluye este resumen y sus documentos de respaldo.</p>
+    </div>
+
+    <div v-if="reporte" class="seccion card seccion-documentos">
+      <div class="seccion-header">
+        <div>
+          <h3>Vales y facturas emitidos</h3>
+          <p>Estos documentos se muestran como origen comercial. Sin aplicación de pago, no se incorporan al efectivo cobrado.</p>
+        </div>
+      </div>
+      <div v-if="documentosOrigenEmitidos.length" class="tabla-container">
+        <table class="tabla-efectivo">
+          <thead><tr><th>Fecha</th><th>Tipo</th><th>Documento</th><th>Destino</th><th>Finca</th><th>Cantidad</th><th class="importe">Importe</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr v-for="documento in documentosOrigenEmitidos" :key="documento.salidaId">
+              <td>{{ formatDate(documento.fecha) }}</td>
+              <td><span class="documento-tipo" :class="getTipoDocumentoClass(documento.tipoDocumento)">{{ documento.tipoDocumento }}</span></td>
+              <td class="numero-documento">{{ documento.numeroDocumento }}</td>
+              <td>{{ documento.destino || '—' }}</td><td>{{ documento.fincaNombre || '—' }}</td>
+              <td>{{ documento.cantidad ?? '—' }}</td><td class="importe">{{ formatCurrency(documento.importeDocumentado) }}</td>
+              <td><span class="estado-cobro pendiente">{{ documento.estadoCobro }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="sin-efectivo">No existen vales o facturas emitidos en el período seleccionado.</div>
+      <p class="nota-pdf">El botón “Descargar PDF detallado” incluye ambas secciones, sin atribuir cobros a documentos cuando no existe ese vínculo.</p>
     </div>
 
     <!-- Tabla Unificada por Producto -->
@@ -205,7 +241,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import MovimientoStockService, { type DocumentoEfectivo, type ReporteConsolidado } from '@/services/MovimientoStockService'
+import MovimientoStockService, { type CobroEfectivoDetalle, type DocumentoOrigenEmitido, type ReporteConsolidado } from '@/services/MovimientoStockService'
 import FincaService from '@/services/FincaService'
 
 interface Finca {
@@ -249,9 +285,8 @@ const totalIngresos = computed(() => {
   return reporte.value.salidasPorDestino.reduce((sum, d) => sum + d.valorTotal, 0)
 })
 
-const documentosEfectivo = computed<DocumentoEfectivo[]>(() =>
-  reporte.value?.documentosEfectivo || []
-)
+const cobrosEfectivo = computed<CobroEfectivoDetalle[]>(() => reporte.value?.cobrosEfectivo || [])
+const documentosOrigenEmitidos = computed<DocumentoOrigenEmitido[]>(() => reporte.value?.documentosOrigenEmitidos || [])
 
 // Tabla unificada: combina entradas y salidas por producto
 const tablaUnificada = computed<ProductoUnificado[]>(() => {
