@@ -384,8 +384,24 @@ interface DiaConBusqueda extends DiaTrabajo {
 const today = new Date()
 const currentYear = today.getFullYear().toString()
 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const numeroNoNegativo = (valor: string): number | null => {
+  const normalizado = valor.trim().replace(',', '.')
+  if (!normalizado || !/^\d+(\.\d+)?$/.test(normalizado)) return null
+  const numero = Number(normalizado)
+  return Number.isFinite(numero) && numero >= 0 ? numero : null
+}
+const fechaCorrespondeAlPeriodo = (fecha: string, year: string, mes: string): boolean => {
+  const indiceMes = meses.indexOf(mes)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || indiceMes < 0 || !/^\d{4}$/.test(year)) return false
+  const [anioFecha, mesFecha] = fecha.split('-').map(Number)
+  return anioFecha === Number(year) && mesFecha === indiceMes + 1
+}
 const currentMonth = meses[today.getMonth()]
-const currentDate = today.toISOString().split('T')[0]
+const fechaLocal = (fecha: Date): string => {
+  const offset = fecha.getTimezoneOffset()
+  return new Date(fecha.getTime() - offset * 60_000).toISOString().slice(0, 10)
+}
+const currentDate = fechaLocal(today)
 
 const form = ref<ReporteRequest & { dias: DiaConBusqueda[], tipoReporteId?: string, tipoAnimalId?: string }>({
   tipoReporteId: '',
@@ -430,7 +446,9 @@ const cargarTiposAnimal = async () => {
 const cargarTrabajadores = async () => {
   try {
     const response = await TrabajadorService.buscarTrabajadores({ size: 999 })
-    trabajadores.value = response.data.data || []
+    // Un reporte de trabajo solo puede asignar personal activo. El backend
+    // continúa validando la relación, pero el filtro evita errores evitables.
+    trabajadores.value = (response.data.data || []).filter((trabajador: Trabajador) => trabajador.activo !== false)
   } catch (error) {
     console.error('Error al cargar trabajadores:', error)
   }
@@ -612,11 +630,20 @@ const guardar = async () => {
     return
   }
 
+  if (!fechaCorrespondeAlPeriodo(form.value.fecha, form.value.year, form.value.mes)) {
+    alert('La fecha del reporte debe pertenecer al mes y año seleccionados')
+    return
+  }
+
   if (!isEditing.value) {
     for (let i = 0; i < form.value.dias.length; i++) {
       const dia = form.value.dias[i]
       if (!dia.fecha) {
         alert(`La fecha del día ${i + 1} es obligatoria`)
+        return
+      }
+      if (!fechaCorrespondeAlPeriodo(dia.fecha, form.value.year, form.value.mes)) {
+        alert(`La fecha del día ${i + 1} debe pertenecer a ${form.value.mes} de ${form.value.year}`)
         return
       }
       if (dia.trabajadores) {
@@ -630,6 +657,18 @@ const guardar = async () => {
             alert(`Ingrese las horas para el trabajador ${j + 1} del día ${i + 1}`)
             return
           }
+          const horas = numeroNoNegativo(trabajador.horas)
+          const norma = numeroNoNegativo(trabajador.norma || '0')
+          if (horas === null || horas > 24) {
+            alert(`Las horas del trabajador ${j + 1} del día ${i + 1} deben estar entre 0 y 24`)
+            return
+          }
+          if (norma === null) {
+            alert(`La norma del trabajador ${j + 1} del día ${i + 1} debe ser un número mayor o igual que cero`)
+            return
+          }
+          trabajador.horas = String(horas)
+          trabajador.norma = String(norma)
         }
       }
     }
@@ -686,7 +725,7 @@ watch(() => props.reporte, async () => {
 }, { immediate: true })
 
 // Recargar código cuando cambie el mes
-watch(() => form.value.mes, () => {
+watch(() => [form.value.year, form.value.mes], () => {
   if (!isEditing.value) {
     cargarProximoCodigo()
   }

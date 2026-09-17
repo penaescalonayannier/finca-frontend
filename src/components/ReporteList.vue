@@ -11,6 +11,14 @@
         class="search-input"
         @keyup.enter="buscarConReset"
       />
+      <select v-model="filtroYear" class="filter-select" @change="buscarConReset">
+        <option value="">Todos los años</option>
+        <option v-for="year in yearsDisponibles" :key="year" :value="year">{{ year }}</option>
+      </select>
+      <select v-model="filtroMes" class="filter-select" @change="buscarConReset">
+        <option value="">Todos los meses</option>
+        <option v-for="mes in meses" :key="mes" :value="mes">{{ mes }}</option>
+      </select>
       <button @click="buscarConReset" class="btn-buscar">Buscar</button>
       <button @click="mostrarModalCrear = true" class="btn-crear">Nuevo Reporte</button>
       <button @click="mostrarModalCargaMasiva = true" class="btn-carga-masiva">⚡ Carga Masiva</button>
@@ -166,6 +174,8 @@ import { confirmDialog } from '@/composables/useConfirmDialog'
 
 const reportes = ref<Reporte[]>([])
 const searchQuery = ref('')
+const filtroYear = ref('')
+const filtroMes = ref('')
 const paginaActual = ref(0)
 const tamanoPagina = ref(10)
 const totalElementos = ref(0)
@@ -180,6 +190,11 @@ const reporteEditando = ref<Reporte | null>(null)
 const reporteDetalleId = ref<string | null>(null)
 
 const totalPaginas = computed(() => Math.ceil(totalElementos.value / tamanoPagina.value))
+const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const yearsDisponibles = computed(() => {
+  const actual = new Date().getFullYear()
+  return Array.from({ length: 7 }, (_, indice) => String(actual - 5 + indice))
+})
 
 const cargarReportes = async () => {
   isLoading.value = true
@@ -196,11 +211,19 @@ const cargarReportes = async () => {
         logicalOperation: 'OR'
       })
       filters.push({
-        key: 'descripcion',
+        key: 'bloque',
         operator: 'CONTAINS',
         value: searchQuery.value.trim(),
         logicalOperation: 'OR'
       })
+      filters.push({ key: 'campo', operator: 'CONTAINS', value: searchQuery.value.trim(), logicalOperation: 'OR' })
+      filters.push({ key: 'area', operator: 'CONTAINS', value: searchQuery.value.trim(), logicalOperation: 'OR' })
+    }
+    if (filtroYear.value) {
+      filters.push({ key: 'year', operator: 'EQUALS', value: filtroYear.value, logicalOperation: 'AND' })
+    }
+    if (filtroMes.value) {
+      filters.push({ key: 'mes', operator: 'EQUALS', value: filtroMes.value, logicalOperation: 'AND' })
     }
 
     console.log('🔍 [ReporteList] Iniciando carga de reportes...')
@@ -240,6 +263,7 @@ const cargarReportes = async () => {
     }
   } catch (error) {
     console.error('❌ [ReporteList] Error al cargar reportes:', error)
+    notify.error('No se pudieron cargar los reportes', 'Revise la conexión o intente nuevamente.')
   } finally {
     isLoading.value = false
   }

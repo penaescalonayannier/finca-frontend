@@ -25,6 +25,7 @@
         </button>
       </div>
     </div>
+    <div v-if="mensajeError" class="error-banner" role="alert">{{ mensajeError }}</div>
 
     <!-- Loading -->
     <div v-if="isLoading" class="loading">
@@ -55,6 +56,7 @@ import ReporteAusentismo from '@/components/ReporteAusentismo.vue'
 import ReporteProductividad from '@/components/ReporteProductividad.vue'
 import ReporteRankings from '@/components/ReporteRankings.vue'
 import ReporteHorasExcedidas from '@/components/ReporteHorasExcedidas.vue'
+import { notify } from '@/composables/useNotification'
 
 const route = useRoute()
 
@@ -64,9 +66,11 @@ const meses = [
 ]
 
 const isLoading = ref(false)
-const yearSeleccionado = ref('2026')
-const mesSeleccionado = ref('Julio')
+const fechaActual = new Date()
+const yearSeleccionado = ref(String(fechaActual.getFullYear()))
+const mesSeleccionado = ref(meses[fechaActual.getMonth()])
 const datosReporte = ref<any>(null)
+const mensajeError = ref('')
 
 const years = computed(() => {
   const currentYear = new Date().getFullYear()
@@ -100,6 +104,7 @@ const cargarDatos = async () => {
   }
 
   isLoading.value = true
+  mensajeError.value = ''
   try {
     if (tipoReporte.value === 'ausentismo') {
       const res = await ReportesMetricasService.obtenerAbsentismo(yearSeleccionado.value, mesSeleccionado.value)
@@ -116,6 +121,9 @@ const cargarDatos = async () => {
     }
   } catch (error) {
     console.error('Error al cargar datos:', error)
+    datosReporte.value = null
+    mensajeError.value = 'No se pudo cargar el reporte para el período seleccionado. Intente nuevamente.'
+    notify.error('Error al cargar el reporte', mensajeError.value)
   } finally {
     isLoading.value = false
   }
@@ -143,6 +151,8 @@ onMounted(() => {
   top: 0;
   z-index: 100;
 }
+
+.error-banner { margin: 0 auto 16px; max-width: 1200px; padding: 12px 16px; color: #842029; background: #f8d7da; border: 1px solid #f5c2c7; border-radius: 8px; }
 
 .btn-volver {
   display: inline-block;

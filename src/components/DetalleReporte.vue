@@ -112,7 +112,7 @@
                 <tr v-if="!dia.trabajadores || dia.trabajadores.length === 0">
                   <td colspan="5" class="no-data">No hay trabajadores en este día</td>
                 </tr>
-                <tr v-for="trabajador in (dia.trabajadores || [])" :key="trabajador.id || Math.random()">
+                <tr v-for="trabajador in (dia.trabajadores || [])" :key="trabajador.id || trabajador.trabajadorId">
                   <td>
                     <strong>{{ trabajador.trabajadorNombre || 'Sin nombre' }}</strong>
                   </td>
@@ -259,11 +259,11 @@
           <div class="form-row">
             <div class="form-group form-group-half">
               <label>Horas *</label>
-              <input v-model="nuevoTrabajadorDia.horas" type="text" placeholder="Ej: 8" class="form-input" required />
+              <input v-model="nuevoTrabajadorDia.horas" type="number" min="0" max="24" step="0.01" inputmode="decimal" placeholder="Ej: 8" class="form-input" required />
             </div>
             <div class="form-group form-group-half">
               <label>Norma</label>
-              <input v-model="nuevoTrabajadorDia.norma" type="text" placeholder="Ej: 2.5" class="form-input" />
+              <input v-model="nuevoTrabajadorDia.norma" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ej: 2.5" class="form-input" />
             </div>
           </div>
         </div>
@@ -289,11 +289,11 @@
           <div class="form-row">
             <div class="form-group form-group-half">
               <label>Horas *</label>
-              <input v-model="trabajadorEditando.horas" type="text" placeholder="Ej: 8" class="form-input" required />
+              <input v-model="trabajadorEditando.horas" type="number" min="0" max="24" step="0.01" inputmode="decimal" placeholder="Ej: 8" class="form-input" required />
             </div>
             <div class="form-group form-group-half">
               <label>Norma</label>
-              <input v-model="trabajadorEditando.norma" type="text" placeholder="Ej: 2.5" class="form-input" />
+              <input v-model="trabajadorEditando.norma" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ej: 2.5" class="form-input" />
             </div>
           </div>
         </div>
@@ -442,6 +442,20 @@ const trabajadorEditando = ref<TrabajadorDia | null>(null)
 const mostrarModalConfirmacionHoras = ref(false)
 const horasExcedidas = ref('')
 const operacionPendiente = ref<'agregar' | 'actualizar' | null>(null)
+const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+const numeroNoNegativo = (valor: string): number | null => {
+  const normalizado = valor.trim().replace(',', '.')
+  if (!normalizado || !/^\d+(\.\d+)?$/.test(normalizado)) return null
+  const numero = Number(normalizado)
+  return Number.isFinite(numero) && numero >= 0 ? numero : null
+}
+const fechaEnPeriodoReporte = (fecha: string): boolean => {
+  if (!reporte.value || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false
+  const indiceMes = meses.indexOf(reporte.value.mes)
+  if (indiceMes < 0 || !/^\d{4}$/.test(reporte.value.year)) return false
+  const [anio, mes] = fecha.split('-').map(Number)
+  return anio === Number(reporte.value.year) && mes === indiceMes + 1
+}
 
 // ==================== COMPUTED ====================
 const trabajadoresOrdenados = computed(() => {
@@ -456,7 +470,7 @@ const trabajadoresOrdenados = computed(() => {
 const cargarTrabajadores = async () => {
   try {
     const response = await TrabajadorService.buscarTrabajadores({ size: 999 })
-    trabajadores.value = response.data.data || []
+    trabajadores.value = (response.data.data || []).filter((trabajador: Trabajador) => trabajador.activo !== false)
     filtrarTrabajadores()
   } catch (error) {
     console.error('Error al cargar trabajadores:', error)
@@ -548,6 +562,10 @@ const agregarDia = async () => {
     alert('Seleccione una fecha')
     return
   }
+  if (!fechaEnPeriodoReporte(nuevoDia.value.fecha)) {
+    notify.warning('Fecha fuera de período', `El día debe pertenecer a ${reporte.value?.mes} de ${reporte.value?.year}.`)
+    return
+  }
 
   isGuardandoDia.value = true
   try {
@@ -624,11 +642,15 @@ const validarYAgregarTrabajadorADia = () => {
     return
   }
 
-  const horas = parseFloat(nuevoTrabajadorDia.value.horas)
-  if (isNaN(horas)) {
-    alert('Las horas deben ser un número válido')
+  const horas = numeroNoNegativo(nuevoTrabajadorDia.value.horas)
+  const norma = numeroNoNegativo(nuevoTrabajadorDia.value.norma || '0')
+  if (horas === null || horas > 24) {
+    alert('Las horas deben ser un número entre 0 y 24')
     return
   }
+  if (norma === null) { alert('La norma debe ser un número mayor o igual a cero'); return }
+  nuevoTrabajadorDia.value.horas = String(horas)
+  nuevoTrabajadorDia.value.norma = String(norma)
 
   if (horas > 8) {
     horasExcedidas.value = nuevoTrabajadorDia.value.horas
@@ -681,11 +703,15 @@ const validarYActualizarTrabajadorDia = () => {
     return
   }
 
-  const horas = parseFloat(trabajadorEditando.value.horas)
-  if (isNaN(horas)) {
-    alert('Las horas deben ser un número válido')
+  const horas = numeroNoNegativo(trabajadorEditando.value.horas)
+  const norma = numeroNoNegativo(trabajadorEditando.value.norma || '0')
+  if (horas === null || horas > 24) {
+    alert('Las horas deben ser un número entre 0 y 24')
     return
   }
+  if (norma === null) { alert('La norma debe ser un número mayor o igual a cero'); return }
+  trabajadorEditando.value.horas = String(horas)
+  trabajadorEditando.value.norma = String(norma)
 
   if (horas > 8) {
     horasExcedidas.value = trabajadorEditando.value.horas
