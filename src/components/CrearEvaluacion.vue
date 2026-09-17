@@ -19,6 +19,34 @@
             <label>Mes:</label>
             <input v-model="evaluacion.mes" type="text" placeholder="Ej: Enero, Febrero" class="input-mes">
           </div>
+          <div class="form-group">
+            <label>Constancia textual del jefe:</label>
+            <input v-model="evaluacion.firmaJefe" type="text" placeholder="Nombre, firma o iniciales" class="input-firma-jefe">
+          </div>
+        </div>
+
+        <div class="ciclo-section">
+          <p><strong>Criterios vigentes:</strong>
+            <span v-if="criterios.length"> {{ criterios.map(c => c.nombre).join(' · ') }}</span>
+            <span v-else> No hay criterios configurados.</span>
+          </p>
+          <label for="evidencia">Evidencia / fundamentación del período</label>
+          <textarea id="evidencia" v-model="evaluacion.evidencia" rows="3"
+            placeholder="Hechos, resultados y evidencia que sustentan la evaluación"></textarea>
+          <details class="gestionar-criterios">
+            <summary>Gestionar criterios de evaluación</summary>
+            <div class="nuevo-criterio">
+              <input v-model="nuevoCriterio.nombre" placeholder="Nuevo criterio">
+              <input v-model="nuevoCriterio.descripcion" placeholder="Descripción breve">
+              <button type="button" @click="agregarCriterio">Agregar</button>
+            </div>
+            <ul v-if="criterios.length">
+              <li v-for="criterio in criterios" :key="criterio.id">
+                {{ criterio.nombre }}
+                <button v-if="criterio.id" type="button" @click="desactivarCriterio(criterio.id)">Desactivar</button>
+              </li>
+            </ul>
+          </details>
         </div>
 
         <!-- Tabla de evaluación -->
@@ -85,7 +113,7 @@
                   <input
                     type="text"
                     v-model="firmas[trabajador.id]"
-                    placeholder="Firma/Inicial"
+                    placeholder="Constancia"
                     class="input-firma"
                   >
                 </td>
@@ -98,10 +126,6 @@
         <div class="jefe-firma-section">
           <div class="jefe-info">
             <p><strong>Jefe de Área:</strong> {{ props.grupo.jefe?.nombre || 'Sin asignar' }}</p>
-          </div>
-          <div class="form-group">
-            <label>Firma del Jefe:</label>
-            <input v-model="evaluacion.firmaJefe" type="text" placeholder="Firma/Inicial" class="input-firma-jefe">
           </div>
         </div>
       </div>
@@ -121,12 +145,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import EvaluacionPDFService from '@/services/EvaluacionPDFService'
 import EvaluacionService from '@/services/EvaluacionService'
 import NotificationToast from '@/components/NotificationToast.vue'
 import type { Grupo } from '@/types/Grupo'
-import type { Evaluacion, CreateBatchEvaluacionRequest, CreateBatchEvaluacionItem } from '@/types/Evaluacion'
+import type { CriterioEvaluacion, Evaluacion, CreateBatchEvaluacionRequest, CreateBatchEvaluacionItem } from '@/types/Evaluacion'
 
 interface Props {
   grupo: Grupo | null
@@ -143,7 +167,8 @@ const emit = defineEmits<Emit>()
 const evaluacion = ref({
   fecha: new Date().toISOString().split('T')[0],
   mes: '',
-  firmaJefe: ''
+  firmaJefe: '',
+  evidencia: ''
 })
 
 const evaluaciones = ref<Record<string, string>>({})
@@ -151,6 +176,39 @@ const observaciones = ref<Record<string, string>>({})
 const firmas = ref<Record<string, string>>({})
 const cargando = ref(false)
 const toast = ref<InstanceType<typeof NotificationToast>>()
+const criterios = ref<CriterioEvaluacion[]>([])
+const nuevoCriterio = ref({ nombre: '', descripcion: '' })
+
+const cargarCriterios = async () => {
+  try {
+    criterios.value = (await EvaluacionService.getCriterios()).data
+  } catch {
+    criterios.value = []
+  }
+}
+
+const agregarCriterio = async () => {
+  if (!nuevoCriterio.value.nombre.trim()) {
+    toast.value?.warning('Falta el criterio', 'Indique el nombre del criterio antes de agregarlo.')
+    return
+  }
+  try {
+    await EvaluacionService.guardarCriterio({ ...nuevoCriterio.value, activo: true, orden: criterios.value.length + 1 })
+    nuevoCriterio.value = { nombre: '', descripcion: '' }
+    await cargarCriterios()
+  } catch {
+    toast.value?.error('No se pudo guardar', 'No pudimos guardar el criterio de evaluación.')
+  }
+}
+
+const desactivarCriterio = async (id: string) => {
+  try {
+    await EvaluacionService.desactivarCriterio(id)
+    await cargarCriterios()
+  } catch {
+    toast.value?.error('No se pudo desactivar', 'El criterio no pudo ser desactivado.')
+  }
+}
 
 const cerrar = () => {
   emit('close')
@@ -197,7 +255,8 @@ const descargarPDFPreview = () => {
       trabajadorId: trab.id,
       trabajadorNombre: trab.nombre,
       evaluacion: evaluaciones.value[trab.id] || '',
-      firma: firmas.value[trab.id],
+        firma: firmas.value[trab.id],
+        constanciaTrabajador: firmas.value[trab.id],
       comentarios: observaciones.value[trab.id] || ''
     })) || [],
     firmaJefe: evaluacion.value.firmaJefe,
@@ -242,7 +301,8 @@ const guardarEvaluacion = async () => {
       .map(trab => ({
         trabajadorId: trab.id,
         calificacion: convertirEvaluacionANumero(evaluaciones.value[trab.id]),
-        comentarios: observaciones.value[trab.id] || '' // Usar observaciones del campo
+        comentarios: observaciones.value[trab.id] || '',
+        constanciaTrabajador: firmas.value[trab.id] || ''
       }))
       .filter(item => item.calificacion > 0) // No guardar trabajadores sin evaluación (calificación 0)
       || []
@@ -253,7 +313,10 @@ const guardarEvaluacion = async () => {
       year: year,
       grupoId: props.grupo.id,
       jefeId: props.grupo.jefe?.id || '',
-      evaluaciones: itemsEvaluacion
+      evaluaciones: itemsEvaluacion,
+      evidencia: evaluacion.value.evidencia || '',
+      criteriosAplicados: JSON.stringify(criterios.value.map(c => ({ id: c.id, nombre: c.nombre, descripcion: c.descripcion }))),
+      constanciaJefe: evaluacion.value.firmaJefe || ''
     }
 
     // Hacer petición al backend
@@ -269,6 +332,8 @@ const guardarEvaluacion = async () => {
     cargando.value = false
   }
 }
+
+onMounted(cargarCriterios)
 </script>
 
 <style scoped>
@@ -352,6 +417,23 @@ const guardarEvaluacion = async () => {
   padding: 20px;
   border-radius: 6px;
 }
+
+.ciclo-section {
+  margin: 0 0 20px;
+  padding: 14px;
+  border-left: 4px solid #667eea;
+  background: #f8f9fa;
+}
+
+.ciclo-section p { margin: 0 0 10px; color: #2c3e50; }
+.ciclo-section label { display: block; font-weight: 600; margin-bottom: 6px; }
+.ciclo-section textarea { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #bdc3c7; border-radius: 4px; resize: vertical; }
+.gestionar-criterios { margin-top: 12px; }
+.gestionar-criterios summary { cursor: pointer; font-weight: 600; }
+.gestionar-criterios ul { padding-left: 20px; margin: 8px 0; }
+.gestionar-criterios button { margin-left: 8px; padding: 3px 7px; border: 1px solid #bdc3c7; border-radius: 3px; background: white; cursor: pointer; }
+.nuevo-criterio { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin: 10px 0; }
+.nuevo-criterio input { min-width: 0; padding: 7px; border: 1px solid #bdc3c7; border-radius: 3px; }
 
 .form-group {
   display: flex;

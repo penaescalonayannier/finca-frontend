@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { Evaluacion, CreateEvaluacionRequest, CreateBatchEvaluacionRequest } from '@/types/Evaluacion'
+import type { Evaluacion, CreateEvaluacionRequest, CreateBatchEvaluacionRequest, CriterioEvaluacion, EstadoEvaluacion } from '@/types/Evaluacion'
 
 const API_BASE_URL = '/api/evaluacion'
 
@@ -16,6 +16,13 @@ export interface EvaluacionPorPeriodo {
   calificacion: number
   comentarios: string
   fechaEvaluacion: string
+  estado?: EstadoEvaluacion
+  evidencia?: string
+  criteriosAplicados?: string
+  constanciaJefe?: string
+  constanciaTrabajador?: string
+  fechaEnvio?: string
+  fechaCierre?: string
 }
 
 export interface ConsolidadoMensualItem {
@@ -107,6 +114,27 @@ class EvaluacionService {
   // Eliminar evaluación
   delete(id: string) {
     return axios.delete(`${API_BASE_URL}/${id}`)
+  }
+
+  cambiarEstado(id: string, data: {
+    estado: EstadoEvaluacion
+    constanciaJefe?: string
+    constanciaTrabajador?: string
+    observacionesCierre?: string
+  }) {
+    return axios.put(`${API_BASE_URL}/${id}/estado`, data)
+  }
+
+  getCriterios(incluirInactivos = false) {
+    return axios.get<CriterioEvaluacion[]>(`${API_BASE_URL}/criterios`, { params: { incluirInactivos } })
+  }
+
+  guardarCriterio(criterio: CriterioEvaluacion) {
+    return axios.post<CriterioEvaluacion>(`${API_BASE_URL}/criterios`, criterio)
+  }
+
+  desactivarCriterio(id: string) {
+    return axios.delete(`${API_BASE_URL}/criterios/${id}`)
   }
 
   // Obtener evaluaciones por período (mes/año)

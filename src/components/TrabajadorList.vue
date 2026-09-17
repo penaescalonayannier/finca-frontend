@@ -262,11 +262,20 @@
             <button @click="editarDesdeDetalles" class="btn-action btn-editar-detail">
               <span class="btn-icon">✏️</span> Editar
             </button>
+            <button @click="abrirHistorialSalarial" class="btn-action btn-editar-detail">
+              <span class="btn-icon">💰</span> Historial salarial
+            </button>
             <button @click="mostrarModalDetalles = false" class="btn-action btn-cerrar">
               Cerrar
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div v-if="mostrarModalSalario && trabajadorDetalles" class="modal">
+      <div class="modal-content modal-salario">
+        <HistorialSalarialModal :trabajador="trabajadorDetalles" @close="mostrarModalSalario = false" />
       </div>
     </div>
 
@@ -323,6 +332,7 @@
 import { ref, computed, onMounted } from 'vue'
 import TrabajadorService from '@/services/TrabajadorService'
 import CrearTrabajador from './CrearTrabajador.vue'
+import HistorialSalarialModal from './HistorialSalarialModal.vue'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 import type { Trabajador } from '@/types/Trabajador'
@@ -349,6 +359,7 @@ const mostrarModalEditar = ref(false)
 const mostrarModalImportar = ref(false)
 const mostrarModalDetalles = ref(false)
 const mostrarModalAdvertencias = ref(false)
+const mostrarModalSalario = ref(false)
 const trabajadorEditando = ref<Trabajador | null>(null)
 const trabajadorDetalles = ref<Trabajador | null>(null)
 const trabajadorADesactivar = ref<Trabajador | null>(null)
@@ -501,6 +512,10 @@ const editarDesdeDetalles = () => {
     mostrarModalDetalles.value = false
     mostrarModalEditar.value = true
   }
+}
+
+const abrirHistorialSalarial = () => {
+  mostrarModalSalario.value = true
 }
 
 const editarTrabajador = async (trabajador: Trabajador) => {

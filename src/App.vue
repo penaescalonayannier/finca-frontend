@@ -86,8 +86,14 @@
             <router-link to="/lista-grupos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-people-group"></i> Grupos
             </router-link>
+            <router-link to="/estructura-organizativa" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-sitemap"></i> Estructura y plazas
+            </router-link>
             <router-link to="/evaluaciones" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-clipboard-check"></i> Evaluaciones
+            </router-link>
+            <router-link to="/disciplina-laboral" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-gavel"></i> Disciplina laboral
             </router-link>
           </div>
         </div>

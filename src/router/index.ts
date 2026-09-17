@@ -28,6 +28,7 @@ import EditarCargo from '@/components/EditarCargo.vue'
 import ListaGrupos from '@/components/ListaGrupos.vue'
 import CrearGrupo from '@/components/CrearGrupo.vue'
 import EditarGrupo from '@/components/EditarGrupo.vue'
+import EstructuraOrganizativaView from '@/views/EstructuraOrganizativaView.vue'
 import EvaluacionTrabajadores from '@/components/EvaluacionTrabajadores.vue'
 import ListarEvaluacionesView from '@/views/ListarEvaluacionesView.vue'
 import ProduccionTerminadaList from '@/components/ProduccionTerminadaList.vue'
@@ -69,6 +70,7 @@ import EditarTipoAnimal from '@/components/EditarTipoAnimal.vue'
 import CentroCostoList from '@/components/CentroCostoList.vue'
 import CrearCentroCosto from '@/components/CrearCentroCosto.vue'
 import EditarCentroCosto from '@/components/EditarCentroCosto.vue'
+import ExpedientesDisciplinariosView from '@/views/ExpedientesDisciplinariosView.vue'
 
 // Contabilidad views
 import LibroDiario from '@/views/contabilidad/LibroDiario.vue'
@@ -220,6 +222,11 @@ const routes: RouteRecordRaw[] = [
     component: ListaGrupos
   },
   {
+    path: '/estructura-organizativa',
+    name: 'EstructuraOrganizativa',
+    component: EstructuraOrganizativaView
+  },
+  {
     path: '/crear-grupo',
     name: 'CrearGrupo',
     component: CrearGrupo
@@ -233,6 +240,11 @@ const routes: RouteRecordRaw[] = [
     path: '/evaluaciones',
     name: 'EvaluacionTrabajadores',
     component: EvaluacionTrabajadores
+  },
+  {
+    path: '/disciplina-laboral',
+    name: 'DisciplinaLaboral',
+    component: ExpedientesDisciplinariosView
   },
   {
     path: '/grupo/:grupoId/evaluaciones',

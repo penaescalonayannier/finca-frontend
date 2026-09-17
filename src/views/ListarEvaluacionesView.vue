@@ -25,6 +25,7 @@
             <th>Año</th>
             <th>Trabajadores</th>
             <th>Calificación Promedio</th>
+            <th>Estado</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -35,10 +36,13 @@
             <td>{{ evaluacion.year }}</td>
             <td class="cantidad-trabajadores">{{ evaluacion.trabajadores?.length || 0 }}</td>
             <td class="calificacion-promedio">{{ calcularPromedio(evaluacion.trabajadores) }}</td>
+            <td><span :class="['estado', `estado-${(evaluacion.estado || 'BORRADOR').toLowerCase()}`]">{{ etiquetaEstado(evaluacion.estado) }}</span></td>
             <td class="acciones">
               <button @click="abrirModalEvaluaciones(evaluacion)" class="btn-ver" title="Ver trabajadores">👁️</button>
               <button @click="descargarPDF(evaluacion)" class="btn-pdf" title="Descargar PDF">📄</button>
-              <button @click="eliminarEvaluacion(evaluacion)" class="btn-eliminar" title="Eliminar">🗑️</button>
+              <button v-if="evaluacion.estado === 'BORRADOR'" @click="cambiarEstadoLote(evaluacion, 'ENVIADA')" class="btn-enviar" title="Enviar a revisión">Enviar</button>
+              <button v-if="evaluacion.estado === 'ENVIADA'" @click="cambiarEstadoLote(evaluacion, 'CERRADA')" class="btn-cerrar-ciclo" title="Cerrar e inmovilizar">Cerrar</button>
+              <button v-if="evaluacion.estado !== 'CERRADA'" @click="eliminarEvaluacion(evaluacion)" class="btn-eliminar" title="Eliminar">🗑️</button>
             </td>
           </tr>
         </tbody>
@@ -125,6 +129,8 @@ const cargarEvaluaciones = async () => {
         calificacion: evaluation.calificacion,
         evaluacion: !evaluation.calificacion ? '' : evaluation.calificacion <= 2 ? 'deficiente' : evaluation.calificacion === 3 ? 'acuado' : 'superior',
         firma: evaluation.firma || '',
+        constanciaTrabajador: evaluation.constanciaTrabajador || evaluation.firma || '',
+        constanciaJefe: evaluation.constanciaJefe || '',
         comentarios: evaluation.comentarios || ''
       }))
 
@@ -136,6 +142,9 @@ const cargarEvaluaciones = async () => {
         year: item0.year || 0,
         trabajadores: trabajadoresTransformados,
         firmaJefe: '', // Dejar en blanco para que se muestre la línea para firmar
+        estado: item0.estado || 'BORRADOR',
+        constanciaJefe: item0.constanciaJefe || '',
+        fechaCierre: item0.fechaCierre,
         grupoId: item0.grupoId || '',
         grupoNombre: grupoNombreBackend || grupoNombre || 'Grupo',
         jefeNombre: jefeNombreBackend || 'Sin asignar'
@@ -168,6 +177,32 @@ const descargarPDF = (evaluacion: Evaluacion) => {
     toast.value?.success('PDF descargado', `Evaluación de ${evaluacion.mes} ${evaluacion.year} descargada correctamente`)
   } catch (error) {
     toast.value?.error('Error al generar PDF', 'No pudimos generar el PDF. Por favor, intenta nuevamente.')
+  }
+}
+
+const etiquetaEstado = (estado?: string) => ({
+  BORRADOR: 'Borrador', ENVIADA: 'Enviada', CERRADA: 'Cerrada', ANULADA: 'Anulada'
+}[estado || 'BORRADOR'] || estado || 'Borrador')
+
+const cambiarEstadoLote = async (evaluacion: any, estado: 'ENVIADA' | 'CERRADA') => {
+  const descripcion = estado === 'CERRADA'
+    ? 'Al cerrar, los registros del lote quedarán inmutables. ¿Desea continuar?'
+    : '¿Enviar este lote de evaluación a revisión?'
+  const confirmar = await confirmDialog.value?.mostrarConfirmacion('Ciclo de evaluación', descripcion,
+    { tipo: estado === 'CERRADA' ? 'warning' : 'info', textoConfirmar: 'Confirmar', textoCancelar: 'Cancelar' })
+  if (!confirmar) return
+  try {
+    for (const trabajador of evaluacion.trabajadores || []) {
+      await EvaluacionService.cambiarEstado(trabajador.id, {
+        estado,
+        constanciaJefe: trabajador.constanciaJefe || evaluacion.constanciaJefe,
+        constanciaTrabajador: trabajador.constanciaTrabajador || trabajador.firma || ''
+      })
+    }
+    await cargarEvaluaciones()
+    toast.value?.success('Ciclo actualizado', `Lote marcado como ${etiquetaEstado(estado).toLowerCase()}.`)
+  } catch (error: any) {
+    toast.value?.error('No se pudo actualizar', error?.response?.data?.message || 'Revise las constancias textuales requeridas para cerrar.')
   }
 }
 
@@ -337,7 +372,9 @@ onMounted(() => {
 
 .btn-pdf,
 .btn-eliminar,
-.btn-ver {
+.btn-ver,
+.btn-enviar,
+.btn-cerrar-ciclo {
   background: none;
   border: none;
   cursor: pointer;
@@ -346,6 +383,14 @@ onMounted(() => {
   border-radius: 4px;
   transition: background-color 0.3s;
 }
+
+.btn-enviar { background: #e8f4ff; color: #1d5f91; font-size: .82em; }
+.btn-cerrar-ciclo { background: #e9f7ef; color: #1e8449; font-size: .82em; }
+.estado { display: inline-block; padding: 3px 8px; border-radius: 10px; font-size: .8em; font-weight: 600; }
+.estado-borrador { background: #eef1f4; color: #59636d; }
+.estado-enviada { background: #e8f4ff; color: #1d5f91; }
+.estado-cerrada { background: #e9f7ef; color: #1e8449; }
+.estado-anulada { background: #fdecea; color: #a93226; }
 
 .btn-ver:hover {
   background-color: #e3f2fd;
