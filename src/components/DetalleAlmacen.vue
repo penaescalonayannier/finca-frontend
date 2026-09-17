@@ -1888,8 +1888,20 @@ onMounted(() => {
   opacity: 0.55;
 }
 
-.modal-salida-multiple {
-  max-width: 760px;
+.modal-operacion.modal-salida-multiple {
+  /* Esta operación muestra varias líneas y, para trabajadores, compradores
+     por producto. Debe prevalecer sobre el ancho del modal de una sola acción. */
+  width: min(96vw, 960px);
+  max-width: 960px;
+  max-height: calc(100dvh - 32px);
+}
+
+.modal-salida-multiple .modal-body {
+  padding: 18px 24px;
+}
+
+.modal-salida-multiple .multiple-productos {
+  max-height: min(46vh, 470px);
 }
 
 .multiple-help {
@@ -2040,6 +2052,29 @@ onMounted(() => {
   .compradores-header {
     grid-template-columns: minmax(100px, 1fr) auto;
     gap: 5px;
+  }
+
+  .modal-operacion.modal-salida-multiple {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 10px;
+  }
+
+  .modal-salida-multiple .modal-body {
+    padding: 14px 10px;
+  }
+
+  .modal-salida-multiple .multiple-productos {
+    max-height: 42vh;
+  }
+
+  .modal-salida-multiple .modal-footer {
+    padding: 12px;
+    flex-wrap: wrap;
+  }
+
+  .modal-salida-multiple .modal-footer button {
+    flex: 1 1 160px;
   }
 }
 
