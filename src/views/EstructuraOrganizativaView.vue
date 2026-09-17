@@ -57,7 +57,23 @@ async function desactivarPlaza (p: Plaza) { if (p.id && confirm(`¿Desactivar pl
 function abrirAsignacion (p: Plaza) { plazaAsignar.value = p; trabajadorId.value = '' }
 async function asignar () { if (!plazaAsignar.value?.id || !trabajadorId.value) return; try { await EstructuraService.asignarTrabajador(plazaAsignar.value.id, trabajadorId.value); plazaAsignar.value = null; await cargar() } catch (e: any) { error.value = e.response?.data?.message || e.message } }
 async function liberar (p: Plaza) { if (p.id && confirm(`¿Liberar plaza ${p.codigo}?`)) { await EstructuraService.desasignarTrabajador(p.id); await cargar() } }
-onMounted(async () => { const [f, c, g] = await Promise.all([FincaService.getAll(), CargoService.getAll(), GrupoService.getAll()]); fincas.value = datos(f); cargos.value = datos(c); grupos.value = datos(g) })
+onMounted(async () => {
+  error.value = ''
+  try {
+    // El endpoint de búsqueda devuelve una respuesta paginada en `data`; no se
+    // usa getAll porque algunas instalaciones antiguas no exponen `content`.
+    const [f, c, g] = await Promise.all([
+      FincaService.buscarFincas({ size: 1000, page: 0, sortBy: 'name', sortType: 'ASC' }),
+      CargoService.getAll(),
+      GrupoService.getAll()
+    ])
+    fincas.value = datos(f)
+    cargos.value = datos(c)
+    grupos.value = datos(g)
+  } catch (e: any) {
+    error.value = e.response?.data?.message || 'No fue posible cargar las fincas para la estructura organizativa.'
+  }
+})
 </script>
 
 <style scoped>
