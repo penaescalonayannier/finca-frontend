@@ -12,6 +12,8 @@ import type {
   SalidaMultipleAlmacenRequest,
   SalidaMultipleAlmacenResponse,
   TransferenciaAlmacenRequest,
+  TransferenciaAlmacenDetalle,
+  RecepcionTransferenciaAlmacenRequest,
   AsignarProductoStockRequest,
   StockOperationResponse
 } from '@/types/Almacen'
@@ -118,6 +120,11 @@ class AlmacenService {
     return axios.get(`${API_BASE_URL}/finca-producto/${fincaProductoId}/almacenes`)
   }
 
+  /** Almacenes activos de una finca, para documentos de control físico. */
+  obtenerAlmacenesPorFinca(fincaId: string): Promise<AxiosResponse<any>> {
+    return axios.get(`${API_BASE_URL}/por-finca/${fincaId}`, { params: { page: 0, pageSize: 200 } })
+  }
+
   /**
    * Obtener stock total del almacen
    */
@@ -132,6 +139,19 @@ class AlmacenService {
    */
   entradaStock(almacenId: string, data: EntradaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
     return axios.post(`${API_BASE_URL}/${almacenId}/entrada`, data)
+  }
+
+  /** Descarga la representación de consulta del informe SC-2-04 ya emitido. */
+  async descargarInformeRecepcionPdf(id: string): Promise<void> {
+    const response = await axios.get(`/api/informes-recepcion/${id}/pdf`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `SC-2-04_${id}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   }
 
   /**
@@ -154,6 +174,18 @@ class AlmacenService {
    */
   transferirStock(almacenId: string, data: TransferenciaAlmacenRequest): Promise<AxiosResponse<StockOperationResponse>> {
     return axios.post(`${API_BASE_URL}/${almacenId}/transferir`, data)
+  }
+
+  transferenciasPendientes(almacenId: string): Promise<AxiosResponse<TransferenciaAlmacenDetalle[]>> {
+    return axios.get(`${API_BASE_URL}/${almacenId}/transferencias-pendientes`)
+  }
+
+  recibirTransferencia(almacenId: string, transferenciaId: string, data: RecepcionTransferenciaAlmacenRequest): Promise<AxiosResponse<TransferenciaAlmacenDetalle>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/transferencias/${transferenciaId}/recibir`, data)
+  }
+
+  revertirTransferencia(almacenId: string, transferenciaId: string, motivo: string): Promise<AxiosResponse<void>> {
+    return axios.post(`${API_BASE_URL}/${almacenId}/transferencias/${transferenciaId}/revertir`, { motivo })
   }
 
   /**

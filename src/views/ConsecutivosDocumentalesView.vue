@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <h2>Consecutivos documentales</h2>
-        <p>Consulta de integridad para facturas, vales y producción terminada.</p>
+        <p>Consulta de integridad para los documentos oficiales emitidos.</p>
       </div>
       <div class="filters">
         <label>Finca
@@ -63,11 +63,11 @@ const fincas = ref<Array<{ id: string; code: string; name: string }>>([])
 const registros = ref<ConsecutivoDocumental[]>([])
 const cargando = ref(false)
 const error = ref('')
-const tipos: TipoConsecutivoDocumental[] = ['FACTURA', 'VALE', 'PRODUCCION']
+const tipos: TipoConsecutivoDocumental[] = ['FACTURA', 'VALE', 'PRODUCCION', 'RECEPCION', 'TRANSFERENCIA_ALMACEN']
 
 const indice = computed(() => new Map(registros.value.map(registro => [registro.tipo, registro])))
 const registroPorTipo = (tipo: TipoConsecutivoDocumental) => indice.value.get(tipo)
-const etiqueta = (tipo: TipoConsecutivoDocumental) => ({ FACTURA: 'Factura', VALE: 'Vale de salida', PRODUCCION: 'Producción terminada' })[tipo]
+const etiqueta = (tipo: TipoConsecutivoDocumental) => ({ FACTURA: 'Factura', VALE: 'Vale de salida', PRODUCCION: 'Producción terminada', RECEPCION: 'Informe de recepción SC-2-04', TRANSFERENCIA_ALMACEN: 'Transferencia SC-2-09' })[tipo]
 const claseEstado = (integridad?: boolean) => integridad === true ? 'ok' : integridad === false ? 'warning' : 'neutral'
 const detalle = (registro: ConsecutivoDocumental) => `${registro.cantidadDocumentos} documento(s) emitido(s) en ${registro.anio}. ${registro.integridad ? 'Secuencia íntegra.' : 'Revise la secuencia documental.'}`
 

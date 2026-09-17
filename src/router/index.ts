@@ -59,6 +59,7 @@ import CajaOficialView from '@/views/CajaOficialView.vue'
 import DocumentosCajaView from '@/views/DocumentosCajaView.vue'
 import BancoView from '@/views/BancoView.vue'
 import ConsecutivosDocumentalesView from '@/views/ConsecutivosDocumentalesView.vue'
+import ConteosFisicosAlmacenView from '@/views/ConteosFisicosAlmacenView.vue'
 import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
 import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
 import EditarTipoReporte from '@/components/EditarTipoReporte.vue'
@@ -272,6 +273,11 @@ const routes: RouteRecordRaw[] = [
     path: '/almacenes/:id',
     name: 'DetalleAlmacen',
     component: DetalleAlmacenView
+  },
+  {
+    path: '/conteos-fisicos-almacen',
+    name: 'ConteosFisicosAlmacen',
+    component: ConteosFisicosAlmacenView
   },
   {
     path: '/reportes-consolidados',

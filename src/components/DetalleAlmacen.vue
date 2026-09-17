@@ -30,6 +30,9 @@
             >
               ▤ Tarjeta de estiba
             </button>
+            <button @click="abrirRecepciones" class="btn-tarjeta-estiba">
+              ⇣ Recepciones{{ transferenciasPendientes.length ? ` (${transferenciasPendientes.length})` : '' }}
+            </button>
             <button @click="abrirModalSalidaMultiple" class="btn-salida-multiple" :disabled="!almacen?.productos?.some(p => p.stock > 0)">
               ↑ Salida múltiple
             </button>
@@ -363,6 +366,10 @@
           </template>
 
           <template v-else>
+            <div class="control-documental-info">
+              <strong>Informe de recepción SC-2-04</strong>
+              <span>Factura y conduce generan un expediente inmutable, enlazado al movimiento físico, con su PDF oficial.</span>
+            </div>
             <div class="form-group">
               <label>Cantidad</label>
               <input v-model.number="entradaForm.cantidad" type="number" min="0.0001" step="0.0001" class="form-control" placeholder="Cantidad a ingresar" />
@@ -378,6 +385,31 @@
               <label>Número de Conduce *</label>
               <input v-model.trim="entradaForm.numeroConduce" type="text" class="form-control" placeholder="Ej: CON-001" required />
               <small class="form-help">El número se conservará en la descripción del movimiento para su trazabilidad.</small>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Proveedor / remitente *</label>
+                <input v-model.trim="entradaForm.proveedor" type="text" class="form-control" placeholder="Entidad o persona que entrega" />
+              </div>
+              <div class="form-group">
+                <label>Costo unitario (CUP) *</label>
+                <input v-model.number="entradaForm.costoUnitario" type="number" min="0" step="0.0001" class="form-control" placeholder="0.0000" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Responsable que entrega *</label>
+                <input v-model.trim="entradaForm.responsableEntrega" type="text" class="form-control" placeholder="Nombre y apellidos" />
+              </div>
+              <div class="form-group">
+                <label>Responsable que recibe *</label>
+                <input v-model.trim="entradaForm.responsableRecibe" type="text" class="form-control" placeholder="Nombre y apellidos" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Fecha del documento fuente *</label>
+              <input v-model="entradaForm.fechaDocumento" type="date" class="form-control" />
             </div>
 
             <div class="form-group">
@@ -741,6 +773,21 @@
         </div>
       </div>
     </div>
+
+    <div v-if="mostrarModalRecepcion" class="modal-overlay" @click.self="mostrarModalRecepcion = false">
+      <div class="modal-operacion">
+        <div class="modal-header modal-header-transferencia"><h4>Recepción SC-2-09</h4><button @click="mostrarModalRecepcion = false" class="btn-cerrar-modal">&times;</button></div>
+        <div class="modal-body">
+          <p v-if="!transferenciasPendientes.length" class="loading-text">No hay transferencias en tránsito para este almacén.</p>
+          <template v-else>
+            <div class="form-group"><label>Documento en tránsito</label><select v-model="transferenciaSeleccionadaId" class="form-control" @change="seleccionarTransferencia"><option v-for="t in transferenciasPendientes" :key="t.id" :value="t.id">{{ t.numeroDocumento }} · {{ t.origenAlmacenNombre }}</option></select></div>
+            <div v-for="linea in transferenciaSeleccionada?.lineas || []" :key="linea.id" class="form-group"><label><strong>{{ linea.productoNombre }}</strong> · Despachado: {{ linea.cantidadDespachada }} {{ linea.unidadMedida || '' }}</label><input v-model.number="cantidadesRecepcion[linea.id]" type="number" min="0" :max="linea.cantidadDespachada" step="0.0001" class="form-control" /><input v-if="cantidadesRecepcion[linea.id] !== linea.cantidadDespachada" v-model.trim="observacionesLineas[linea.id]" class="form-control" placeholder="Motivo de diferencia o rechazo" /></div>
+            <div class="form-group"><label>Observaciones del receptor</label><textarea v-model="observacionesRecepcion" rows="2" class="form-control" placeholder="Acta, incidencia u observación general"></textarea></div>
+          </template>
+        </div>
+        <div class="modal-footer"><button @click="mostrarModalRecepcion = false" class="btn-cancelar">Cancelar</button><button v-if="transferenciaSeleccionada" @click="confirmarRecepcion" class="btn-confirmar" :disabled="procesando">{{ procesando ? 'Procesando...' : 'Confirmar recepción' }}</button></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -754,7 +801,7 @@ import MovimientoStockService from '@/services/MovimientoStockService'
 import { AsientoContableService } from '@/services/ContabilidadService'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
-import type { Almacen, AlmacenFincaProducto, TipoMovimientoStock } from '@/types/Almacen'
+import type { Almacen, AlmacenFincaProducto, TipoMovimientoStock, TransferenciaAlmacenDetalle } from '@/types/Almacen'
 import type { FincaProducto } from '@/types/FincaProducto'
 import type { DestinoSalida, ItemSalida, CreateSalidaRequest } from '@/types/Salida'
 import type { AsientoContable } from '@/types/Contabilidad'
@@ -793,6 +840,12 @@ const mostrarModalEntrada = ref(false)
 const mostrarModalSalida = ref(false)
 const mostrarModalSalidaMultiple = ref(false)
 const mostrarModalTransferencia = ref(false)
+const mostrarModalRecepcion = ref(false)
+const transferenciasPendientes = ref<TransferenciaAlmacenDetalle[]>([])
+const transferenciaSeleccionadaId = ref('')
+const cantidadesRecepcion = reactive<Record<string, number>>({})
+const observacionesLineas = reactive<Record<string, string>>({})
+const observacionesRecepcion = ref('')
 const mostrarModalTarjetaEstiba = ref(false)
 const productoOperacion = ref<AlmacenFincaProducto | null>(null)
 const procesando = ref(false)
@@ -857,7 +910,11 @@ const entradaForm = reactive({
   centroCosto: '',
   costoUnitario: undefined as number | undefined,
   trabajadorEntregaId: '',
-  trabajadorRecibeId: ''
+  trabajadorRecibeId: '',
+  proveedor: '',
+  responsableEntrega: '',
+  responsableRecibe: '',
+  fechaDocumento: new Date().toISOString().slice(0, 10)
 })
 
 const esEntradaProduccion = computed(() => entradaForm.tipo === 'ENTRADA_PRODUCCION')
@@ -872,8 +929,12 @@ const trabajadoresDeLaFinca = computed(() =>
 const esEntradaValida = computed(() => {
   if (!Number.isFinite(entradaForm.cantidad) || entradaForm.cantidad <= 0) return false
 
-  if (entradaForm.tipo === 'ENTRADA_FACTURA') return Boolean(entradaForm.numeroFactura.trim())
-  if (entradaForm.tipo === 'ENTRADA_CONDUCE') return Boolean(entradaForm.numeroConduce.trim())
+  if (entradaForm.tipo === 'ENTRADA_FACTURA' || entradaForm.tipo === 'ENTRADA_CONDUCE') {
+    const numeroFuente = entradaForm.tipo === 'ENTRADA_FACTURA' ? entradaForm.numeroFactura : entradaForm.numeroConduce
+    return Boolean(numeroFuente.trim() && entradaForm.proveedor.trim() && entradaForm.responsableEntrega.trim()
+      && entradaForm.responsableRecibe.trim() && entradaForm.fechaDocumento
+      && Number.isFinite(entradaForm.costoUnitario) && (entradaForm.costoUnitario as number) >= 0)
+  }
   if (!esEntradaProduccion.value) return true
 
   const costoUnitario = entradaForm.costoUnitario
@@ -1274,6 +1335,10 @@ const abrirModalEntrada = async (producto: AlmacenFincaProducto) => {
   entradaForm.costoUnitario = undefined
   entradaForm.trabajadorEntregaId = ''
   entradaForm.trabajadorRecibeId = ''
+  entradaForm.proveedor = ''
+  entradaForm.responsableEntrega = ''
+  entradaForm.responsableRecibe = ''
+  entradaForm.fechaDocumento = new Date().toISOString().slice(0, 10)
   mostrarModalEntrada.value = true
   await cargarTrabajadores()
 }
@@ -1301,15 +1366,23 @@ const ejecutarEntrada = async () => {
       })
       notify.success('Producción registrada', `Se registró la producción terminada y se agregaron ${entradaForm.cantidad} unidades`)
     } else {
-      await AlmacenService.entradaStock(almacen.value.id, {
+      const respuesta = await AlmacenService.entradaStock(almacen.value.id, {
         almacenFincaProductoId: productoOperacion.value.id,
         cantidad: entradaForm.cantidad,
         tipo: entradaForm.tipo,
         descripcion: entradaForm.descripcion,
         numeroFactura: entradaForm.numeroFactura,
-        numeroConduce: entradaForm.numeroConduce
+        numeroConduce: entradaForm.numeroConduce,
+        proveedor: entradaForm.proveedor,
+        responsableEntrega: entradaForm.responsableEntrega,
+        responsableRecibe: entradaForm.responsableRecibe,
+        costoUnitario: entradaForm.costoUnitario,
+        fechaDocumento: entradaForm.fechaDocumento
       })
-      notify.success('Entrada registrada', `Se agregaron ${entradaForm.cantidad} unidades`)
+      notify.success('Entrada registrada', `Se agregaron ${entradaForm.cantidad} unidades y se emitió el informe SC-2-04`)
+      if (respuesta.data.informeRecepcionId) {
+        await AlmacenService.descargarInformeRecepcionPdf(respuesta.data.informeRecepcionId)
+      }
     }
     cerrarModalEntrada()
     await cargarAlmacen()
@@ -1543,6 +1616,51 @@ const cargarAlmacenesDestino = async () => {
   }
 }
 
+const transferenciaSeleccionada = computed(() => transferenciasPendientes.value.find(t => t.id === transferenciaSeleccionadaId.value))
+
+const seleccionarTransferencia = () => {
+  const t = transferenciaSeleccionada.value
+  Object.keys(cantidadesRecepcion).forEach(k => delete cantidadesRecepcion[k])
+  Object.keys(observacionesLineas).forEach(k => delete observacionesLineas[k])
+  t?.lineas.forEach(l => { cantidadesRecepcion[l.id] = l.cantidadDespachada })
+}
+
+const abrirRecepciones = async () => {
+  if (!almacen.value?.id) return
+  try {
+    transferenciasPendientes.value = (await AlmacenService.transferenciasPendientes(almacen.value.id)).data
+    transferenciaSeleccionadaId.value = transferenciasPendientes.value[0]?.id || ''
+    observacionesRecepcion.value = ''
+    seleccionarTransferencia()
+    mostrarModalRecepcion.value = true
+  } catch (error) {
+    console.error('Error al cargar transferencias:', error)
+    notify.error('Error', 'No se pudieron cargar las transferencias en tránsito')
+  }
+}
+
+const confirmarRecepcion = async () => {
+  const t = transferenciaSeleccionada.value
+  if (!t || !almacen.value?.id) return
+  for (const l of t.lineas) {
+    const recibida = cantidadesRecepcion[l.id]
+    if (!Number.isFinite(recibida) || recibida < 0 || recibida > l.cantidadDespachada) return notify.error('Recepción inválida', `Revise la cantidad de ${l.productoNombre}`)
+    if (recibida !== l.cantidadDespachada && !observacionesLineas[l.id]?.trim() && !observacionesRecepcion.value.trim()) return notify.error('Motivo requerido', `Explique la diferencia de ${l.productoNombre}`)
+  }
+  procesando.value = true
+  try {
+    await AlmacenService.recibirTransferencia(almacen.value.id, t.id, { observaciones: observacionesRecepcion.value || undefined, lineas: t.lineas.map(l => ({ lineaId: l.id, cantidadRecibida: cantidadesRecepcion[l.id], observaciones: observacionesLineas[l.id] || undefined })) })
+    notify.success('Recepción registrada', `El documento ${t.numeroDocumento} fue cerrado con trazabilidad.`)
+    mostrarModalRecepcion.value = false
+    await cargarAlmacen()
+    emit('updated')
+  } catch (error: unknown) {
+    console.error('Error al recibir transferencia:', error)
+    const err = error as { response?: { data?: { message?: string } } }
+    notify.error('Error', err.response?.data?.message || 'No se pudo confirmar la recepción')
+  } finally { procesando.value = false }
+}
+
 const ejecutarTransferencia = async () => {
   if (!productoOperacion.value || !almacen.value?.id || !transferenciaForm.destinoAlmacenId || !transferenciaForm.cantidad) return
 
@@ -1554,7 +1672,7 @@ const ejecutarTransferencia = async () => {
       cantidad: transferenciaForm.cantidad,
       observaciones: transferenciaForm.observaciones
     })
-    notify.success('Transferencia completada', `Se transfirieron ${transferenciaForm.cantidad} unidades`)
+    notify.success('Despacho registrado', 'La transferencia quedó en tránsito hasta que el almacén destino la reciba.')
     cerrarModalTransferencia()
     await cargarAlmacen()
     if (mostrarAsientos.value) {

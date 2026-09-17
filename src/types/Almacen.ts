@@ -72,6 +72,12 @@ export interface EntradaAlmacenRequest {
   numeroFactura?: string
   /** Número del conduce de recepción cuando el tipo es ENTRADA_CONDUCE. */
   numeroConduce?: string
+  /** Datos obligatorios del expediente SC-2-04 para factura o conduce. */
+  proveedor?: string
+  responsableEntrega?: string
+  responsableRecibe?: string
+  costoUnitario?: number
+  fechaDocumento?: string
 }
 
 /**
@@ -121,6 +127,38 @@ export interface TransferenciaAlmacenRequest {
   observaciones?: string
 }
 
+export interface TransferenciaAlmacenLineaDetalle {
+  id: string
+  fincaProductoId: string
+  productoNombre: string
+  unidadMedida?: string
+  cantidadDespachada: number
+  cantidadRecibida?: number
+  cantidadRechazada?: number
+  observaciones?: string
+}
+
+export interface TransferenciaAlmacenDetalle {
+  id: string
+  fincaId: string
+  numeroDocumento: string
+  origenAlmacenId: string
+  origenAlmacenNombre?: string
+  destinoAlmacenId: string
+  destinoAlmacenNombre?: string
+  estado: 'EN_TRANSITO' | 'RECIBIDA' | 'RECHAZADA' | 'REVERSADA'
+  fechaDespacho: string
+  fechaRecepcion?: string
+  observaciones?: string
+  motivoCierre?: string
+  lineas: TransferenciaAlmacenLineaDetalle[]
+}
+
+export interface RecepcionTransferenciaAlmacenRequest {
+  observaciones?: string
+  lineas: Array<{ lineaId: string; cantidadRecibida: number; observaciones?: string }>
+}
+
 export interface AsignarProductoStockRequest {
   fincaProductoId: string
   stockInicial?: number
@@ -135,4 +173,6 @@ export interface StockOperationResponse {
   stockOrigenNuevo?: number
   stockDestinoNuevo?: number
   message?: string
+  informeRecepcionId?: string
+  movimientoStockId?: string
 }

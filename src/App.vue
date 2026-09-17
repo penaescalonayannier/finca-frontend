@@ -112,6 +112,9 @@
             <router-link to="/almacenes" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-store"></i> Almacenes
             </router-link>
+            <router-link to="/conteos-fisicos-almacen" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-clipboard-check"></i> Inventario físico
+            </router-link>
             <router-link to="/campos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-seedling"></i> Campos
             </router-link>

@@ -1,6 +1,6 @@
 import axios, { type AxiosResponse } from 'axios'
 
-export type TipoConsecutivoDocumental = 'FACTURA' | 'VALE' | 'PRODUCCION'
+export type TipoConsecutivoDocumental = 'FACTURA' | 'VALE' | 'PRODUCCION' | 'RECEPCION' | 'TRANSFERENCIA_ALMACEN'
 
 /** Vista de auditoría. Los números son asignados exclusivamente por el backend. */
 export interface ConsecutivoDocumental {
