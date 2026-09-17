@@ -15,7 +15,7 @@ export type TipoConsecutivoDocumentalConocido =
   | 'CONTEO_FISICO'
   | 'AJUSTE_INVENTARIO'
 
-export type TipoConsecutivoDocumental = TipoConsecutivoDocumentalConocido | (string & {})
+export type TipoConsecutivoDocumental = TipoConsecutivoDocumentalConocido | (string & NonNullable<unknown>)
 
 export interface FormaNumeradaDocumental {
   codigo?: string
