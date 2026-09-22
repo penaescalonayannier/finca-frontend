@@ -87,7 +87,14 @@
                   <span class="dia-nombre">{{ formatDayName(dia.fecha) }}</span>
                   <span class="dia-numero">{{ formatDayNumber(dia.fecha) }}</span>
                   <button
-                    @click="eliminarDia(dia)"
+                    @click.stop="abrirModalHorasColumna(dia)"
+                    class="btn-aplicar-horas-columna"
+                    :disabled="!dia.trabajadores?.length || guardando"
+                    title="Definir horas para todos los trabajadores de este día"
+                    aria-label="Definir horas para toda la columna"
+                  >⏱</button>
+                  <button
+                    @click.stop="eliminarDia(dia)"
                     class="btn-eliminar-dia"
                     title="Eliminar día"
                   >×</button>
@@ -359,6 +366,43 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal definir horas para una columna/día -->
+    <div v-if="mostrarModalHorasColumna" class="modal-overlay" @click.self="cerrarModalHorasColumna">
+      <div class="modal-box modal-horas-columna">
+        <div class="modal-header">
+          <h3>Definir horas del día</h3>
+          <button @click="cerrarModalHorasColumna" class="btn-cerrar-modal" :disabled="guardando">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="texto-modal-horas">
+            Se aplicará el valor a la sección <strong>Horas</strong> de los
+            {{ trabajadoresEnColumna }} trabajador(es) del {{ diaHorasSeleccionado ? formatDateFull(diaHorasSeleccionado.fecha) : '' }}.
+            La norma de cada trabajador se conservará sin cambios.
+          </p>
+          <div class="form-group">
+            <label for="horas-columna">Horas a aplicar</label>
+            <input
+              id="horas-columna"
+              v-model="horasColumna"
+              type="number"
+              min="0"
+              max="24"
+              step="0.5"
+              class="input-numero"
+              :disabled="guardando"
+              @keyup.enter="aplicarHorasColumna"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="cerrarModalHorasColumna" class="btn-cancelar" :disabled="guardando">Cancelar</button>
+          <button @click="aplicarHorasColumna" class="btn-guardar" :disabled="guardando">
+            {{ guardando ? 'Aplicando...' : 'Aplicar a toda la columna' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -407,6 +451,11 @@ const buscarTrabajadorTexto = ref('')
 const trabajadoresList = ref<Trabajador[]>([])
 const trabajadoresFiltrados = ref<Trabajador[]>([])
 const guardandoTrabajador = ref(false)
+
+// Aplicación masiva de horas para un día/columna específico
+const mostrarModalHorasColumna = ref(false)
+const diaHorasSeleccionado = ref<DiaTrabajo | null>(null)
+const horasColumna = ref('8')
 
 // Meses en español para mapeo
 const mesesMap: Record<string, number> = {
@@ -521,6 +570,10 @@ const tieneDiasLaborables = computed(() => {
     return dayOfWeek >= 1 && dayOfWeek <= 5 && dia.trabajadores && dia.trabajadores.length > 0
   })
 })
+
+const trabajadoresEnColumna = computed(() =>
+  diaHorasSeleccionado.value?.trabajadores?.filter(trabajador => Boolean(trabajador.id)).length || 0
+)
 
 // Obtener el registro TrabajadorDia
 const getTrabajadorDia = (trabajadorId: string, dia: DiaTrabajo): TrabajadorDia | undefined => {
@@ -831,6 +884,71 @@ const eliminarTrabajadorDeReporte = async (trabajador: TrabajadorResumen) => {
   } catch (error: any) {
     console.error('Error al eliminar trabajador del reporte:', error)
     alert(error.response?.data?.message || 'Error al eliminar el trabajador')
+  } finally {
+    guardando.value = false
+  }
+}
+
+// ==================== DEFINIR HORAS POR COLUMNA ====================
+
+const abrirModalHorasColumna = (dia: DiaTrabajo) => {
+  const primerTrabajador = dia.trabajadores?.find(trabajador => trabajador.id)
+  if (!primerTrabajador) {
+    alert('No hay trabajadores registrados para este día')
+    return
+  }
+
+  diaHorasSeleccionado.value = dia
+  horasColumna.value = primerTrabajador.horas || '8'
+  mostrarModalHorasColumna.value = true
+}
+
+const cerrarModalHorasColumna = (forzar = false) => {
+  if (guardando.value && !forzar) return
+  mostrarModalHorasColumna.value = false
+  diaHorasSeleccionado.value = null
+  horasColumna.value = '8'
+}
+
+const aplicarHorasColumna = async () => {
+  const dia = diaHorasSeleccionado.value
+  const horas = Number(horasColumna.value)
+
+  if (!dia || !dia.id) return
+  if (!Number.isFinite(horas) || horas < 0 || horas > 24) {
+    alert('Las horas deben ser un número entre 0 y 24')
+    return
+  }
+
+  const registros = (dia.trabajadores || []).filter(
+    (trabajador): trabajador is TrabajadorDia & { id: string } => Boolean(trabajador.id)
+  )
+  if (registros.length === 0) {
+    alert('No hay trabajadores registrados para este día')
+    return
+  }
+
+  if (!confirm(`¿Aplicar ${horas} hora(s) a los ${registros.length} trabajador(es) del ${formatDateFull(dia.fecha)}? La norma actual se conservará.`)) {
+    return
+  }
+
+  guardando.value = true
+  ultimoGuardado.value = false
+  try {
+    for (const trabajador of registros) {
+      await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
+        horas: String(horas),
+        norma: trabajador.norma || '0'
+      })
+    }
+
+    await cargarDias()
+    cerrarModalHorasColumna(true)
+    ultimoGuardado.value = true
+    setTimeout(() => { ultimoGuardado.value = false }, 2000)
+  } catch (error: any) {
+    console.error('Error al definir horas para la columna:', error)
+    alert(error.response?.data?.message || 'No fue posible aplicar las horas a toda la columna')
   } finally {
     guardando.value = false
   }
@@ -1632,8 +1750,36 @@ thead .sticky-col {
   transition: opacity 0.2s;
 }
 
-th:hover .btn-eliminar-dia {
+.btn-aplicar-horas-columna {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1D5A3F;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+th:hover .btn-eliminar-dia,
+th:hover .btn-aplicar-horas-columna,
+.btn-aplicar-horas-columna:focus-visible {
   opacity: 1;
+}
+
+.btn-aplicar-horas-columna:hover:not(:disabled) {
+  background: #fff;
+  transform: scale(1.12);
+}
+
+.btn-aplicar-horas-columna:disabled {
+  cursor: not-allowed;
 }
 
 .col-total {
@@ -2003,6 +2149,17 @@ thead .col-total {
 
 .modal-trabajador {
   max-width: 500px;
+}
+
+.modal-horas-columna {
+  max-width: 420px;
+}
+
+.texto-modal-horas {
+  margin: 0 0 18px;
+  color: #555;
+  line-height: 1.5;
+  font-size: 0.92em;
 }
 
 .dias-mini-grid {
