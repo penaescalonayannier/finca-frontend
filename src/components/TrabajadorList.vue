@@ -68,6 +68,7 @@
           <th>RUC</th>
           <th>Nombre</th>
           <th>Cuenta</th>
+          <th>Nivel Cultural</th>
           <th>Grupo</th>
           <th>Estado</th>
           <th>Acciones</th>
@@ -75,7 +76,7 @@
       </thead>
       <tbody>
         <tr v-if="trabajadores.length === 0">
-          <td colspan="8" class="no-data">No se encontraron trabajadores</td>
+          <td colspan="9" class="no-data">No se encontraron trabajadores</td>
         </tr>
         <tr v-for="(trabajador, index) in trabajadores" :key="trabajador.id" :class="{ 'inactivo': !trabajador.activo }">
           <td class="numero-col">{{ (paginaActual * tamanoPagina) + (index + 1) }}</td>
@@ -93,6 +94,7 @@
             <span v-if="trabajador.cargoName" class="cargo-subtexto">{{ trabajador.cargoName }}</span>
           </td>
           <td>{{ trabajador.cuenta }}</td>
+          <td>{{ trabajador.nivelCultural || '-' }}</td>
           <td>
             <span class="grupo-badge">{{ trabajador.grupoNombre || '-' }}</span>
           </td>
@@ -220,6 +222,14 @@
               <div class="detalle-info">
                 <span class="detalle-label">Cuenta</span>
                 <span class="detalle-value">{{ trabajadorDetalles.cuenta }}</span>
+              </div>
+            </div>
+
+            <div class="detalle-card">
+              <div class="detalle-icon">🎓</div>
+              <div class="detalle-info">
+                <span class="detalle-label">Nivel Cultural</span>
+                <span class="detalle-value">{{ trabajadorDetalles.nivelCultural || 'No registrado' }}</span>
               </div>
             </div>
 
@@ -403,6 +413,12 @@ const cargarTrabajadores = async () => {
       })
       filters.push({
         key: 'ruc',
+        operator: 'CONTAINS',
+        value: searchQuery.value.trim(),
+        logicalOperation: 'OR'
+      })
+      filters.push({
+        key: 'nivelCultural',
         operator: 'CONTAINS',
         value: searchQuery.value.trim(),
         logicalOperation: 'OR'

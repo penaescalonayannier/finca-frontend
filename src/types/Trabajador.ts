@@ -7,6 +7,7 @@ export interface Trabajador {
   ruc: string
   nombre: string
   cuenta: string
+  nivelCultural?: string
   fincaId?: string
   fincaCode?: string
   fincaName?: string
@@ -21,6 +22,7 @@ export interface TrabajadorRequest {
   ruc: string
   nombre: string
   cuenta: string
+  nivelCultural?: string
   fincaId?: string
   grupoId?: string
   cargoId?: string
@@ -32,6 +34,7 @@ export interface TrabajadorResponse {
   ruc: string
   nombre: string
   cuenta: string
+  nivelCultural?: string
   fincaId?: string
   fincaCode?: string
   fincaName?: string

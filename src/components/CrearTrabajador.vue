@@ -39,6 +39,27 @@
       </div>
 
       <div class="form-group">
+        <label for="nivel-cultural">Nivel Cultural</label>
+        <input
+          id="nivel-cultural"
+          v-model.trim="form.nivelCultural"
+          type="text"
+          list="niveles-culturales"
+          maxlength="100"
+          placeholder="Ej: Técnico medio"
+        />
+        <datalist id="niveles-culturales">
+          <option value="Primaria" />
+          <option value="Secundaria básica" />
+          <option value="Preuniversitario" />
+          <option value="Técnico medio" />
+          <option value="Obrero calificado" />
+          <option value="Universitario" />
+          <option value="Posgrado" />
+        </datalist>
+      </div>
+
+      <div class="form-group">
         <label for="finca">Finca *</label>
         <div v-if="fincasDisponibles.length === 0" class="loading-cargos">
           Cargando fincas...
@@ -157,6 +178,7 @@ const form = ref<TrabajadorRequest>({
   ruc: '',
   nombre: '',
   cuenta: '',
+  nivelCultural: '',
   fincaId: undefined,
   grupoId: undefined,
   cargoId: undefined,
@@ -215,6 +237,7 @@ const cargarDatos = () => {
     ruc: props.trabajador.ruc || '',
     nombre: props.trabajador.nombre || '',
     cuenta: props.trabajador.cuenta || '',
+    nivelCultural: props.trabajador.nivelCultural || '',
     fincaId: fincaId,
     grupoId: grupoId,
     cargoId: cargoId,
@@ -288,6 +311,7 @@ watch(
         ruc: '',
         nombre: '',
         cuenta: '',
+        nivelCultural: '',
         fincaId: '',
         grupoId: '',
         cargoId: '',
