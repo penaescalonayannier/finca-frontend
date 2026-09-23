@@ -1843,12 +1843,11 @@ thead .sticky-col {
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.2s, transform 0.2s;
 }
 
 th:hover .btn-eliminar-dia,
-th:hover .btn-aplicar-horas-columna,
 .btn-aplicar-horas-columna:focus-visible {
   opacity: 1;
 }
@@ -1932,12 +1931,11 @@ thead .col-total {
   border-radius: 50%;
   font-size: 11px;
   cursor: pointer;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.2s, transform 0.2s;
 }
 
 .col-trabajador:hover .btn-eliminar-trabajador,
-.col-trabajador:hover .btn-aplicar-horas-fila,
 .btn-aplicar-horas-fila:focus-visible {
   opacity: 1;
 }
