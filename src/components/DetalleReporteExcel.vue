@@ -401,11 +401,39 @@
               @keyup.enter="aplicarHorasColumna"
             />
           </div>
+          <div class="form-group grupo-trabajadores-columna">
+            <div class="titulo-trabajadores-columna">
+              <label>Trabajadores a aplicar <span>(opcional)</span></label>
+              <button
+                v-if="trabajadoresHorasColumnaSeleccionados.length > 0"
+                type="button"
+                class="btn-aplicar-todos"
+                :disabled="guardando"
+                @click="limpiarSeleccionTrabajadoresColumna"
+              >Aplicar a todos</button>
+            </div>
+            <p class="ayuda-trabajadores-columna">
+              {{ trabajadoresHorasColumnaSeleccionados.length === 0
+                ? 'Sin selección: se aplicará a todos los trabajadores.'
+                : `Se aplicará solo a ${trabajadoresEnColumna} trabajador(es) seleccionado(s).` }}
+            </p>
+            <div class="lista-trabajadores-columna">
+              <label v-for="trabajador in trabajadoresUnicos" :key="trabajador.id" class="opcion-trabajador-columna">
+                <input
+                  type="checkbox"
+                  :checked="trabajadoresHorasColumnaSeleccionados.includes(trabajador.id)"
+                  :disabled="guardando"
+                  @change="toggleTrabajadorHorasColumna(trabajador.id)"
+                />
+                <span>{{ trabajador.nombre }}</span>
+              </label>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button @click="cerrarModalHorasColumna" class="btn-cancelar" :disabled="guardando">Cancelar</button>
           <button @click="aplicarHorasColumna" class="btn-guardar" :disabled="guardando">
-            {{ guardando ? 'Aplicando...' : 'Aplicar a toda la columna' }}
+            {{ guardando ? 'Aplicando...' : trabajadoresHorasColumnaSeleccionados.length === 0 ? 'Aplicar a toda la columna' : 'Aplicar a seleccionados' }}
           </button>
         </div>
       </div>
@@ -499,6 +527,7 @@ const guardandoTrabajador = ref(false)
 const mostrarModalHorasColumna = ref(false)
 const diaHorasSeleccionado = ref<DiaTrabajo | null>(null)
 const horasColumna = ref('8')
+const trabajadoresHorasColumnaSeleccionados = ref<string[]>([])
 
 // Aplicación masiva de horas para un trabajador/fila específica
 const mostrarModalHorasFila = ref(false)
@@ -610,8 +639,17 @@ const tieneDomingos = computed(() => {
   })
 })
 
+const trabajadoresObjetivoColumna = computed(() => {
+  if (trabajadoresHorasColumnaSeleccionados.value.length === 0) {
+    return trabajadoresUnicos.value
+  }
+
+  const seleccionados = new Set(trabajadoresHorasColumnaSeleccionados.value)
+  return trabajadoresUnicos.value.filter(trabajador => seleccionados.has(trabajador.id))
+})
+
 const trabajadoresEnColumna = computed(() =>
-  diaHorasSeleccionado.value ? trabajadoresUnicos.value.length : 0
+  diaHorasSeleccionado.value ? trabajadoresObjetivoColumna.value.length : 0
 )
 
 // Obtener el registro TrabajadorDia
@@ -939,7 +977,21 @@ const abrirModalHorasColumna = (dia: DiaTrabajo) => {
 
   diaHorasSeleccionado.value = dia
   horasColumna.value = primerTrabajador?.horas || '8'
+  trabajadoresHorasColumnaSeleccionados.value = []
   mostrarModalHorasColumna.value = true
+}
+
+const toggleTrabajadorHorasColumna = (trabajadorId: string) => {
+  const indice = trabajadoresHorasColumnaSeleccionados.value.indexOf(trabajadorId)
+  if (indice === -1) {
+    trabajadoresHorasColumnaSeleccionados.value.push(trabajadorId)
+  } else {
+    trabajadoresHorasColumnaSeleccionados.value.splice(indice, 1)
+  }
+}
+
+const limpiarSeleccionTrabajadoresColumna = () => {
+  trabajadoresHorasColumnaSeleccionados.value = []
 }
 
 const cerrarModalHorasColumna = (forzar = false) => {
@@ -947,6 +999,7 @@ const cerrarModalHorasColumna = (forzar = false) => {
   mostrarModalHorasColumna.value = false
   diaHorasSeleccionado.value = null
   horasColumna.value = '8'
+  limpiarSeleccionTrabajadoresColumna()
 }
 
 const aplicarHorasColumna = async () => {
@@ -959,7 +1012,7 @@ const aplicarHorasColumna = async () => {
     return
   }
 
-  const trabajadores = trabajadoresUnicos.value
+  const trabajadores = trabajadoresObjetivoColumna.value
   if (trabajadores.length === 0) {
     alert('No hay trabajadores registrados en el reporte')
     return
@@ -972,7 +1025,7 @@ const aplicarHorasColumna = async () => {
   guardando.value = true
   ultimoGuardado.value = false
   try {
-    await aplicarHorasADia(dia, String(horas), true)
+    await aplicarHorasADia(dia, String(horas), true, trabajadores)
 
     await cargarDias()
     cerrarModalHorasColumna(true)
@@ -1061,10 +1114,15 @@ const aplicarHorasFila = async () => {
 
 // ==================== DEFINIR DÍAS MASIVAMENTE ====================
 
-const aplicarHorasADia = async (dia: DiaTrabajo, horas: string, conservarNorma = false) => {
+const aplicarHorasADia = async (
+  dia: DiaTrabajo,
+  horas: string,
+  conservarNorma = false,
+  trabajadoresObjetivo = trabajadoresUnicos.value
+) => {
   if (!dia.id) return
 
-  for (const trabajador of trabajadoresUnicos.value) {
+  for (const trabajador of trabajadoresObjetivo) {
     const registro = getTrabajadorDia(trabajador.id, dia)
     const norma = conservarNorma ? (registro?.norma || '0') : '0'
 
@@ -2266,6 +2324,79 @@ thead .col-total {
   color: #555;
   line-height: 1.5;
   font-size: 0.92em;
+}
+
+.grupo-trabajadores-columna {
+  margin-top: 18px;
+}
+
+.titulo-trabajadores-columna {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.titulo-trabajadores-columna label {
+  margin-bottom: 0;
+}
+
+.titulo-trabajadores-columna span {
+  color: #777;
+  font-weight: 400;
+}
+
+.btn-aplicar-todos {
+  border: none;
+  background: transparent;
+  color: #1D5A3F;
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-aplicar-todos:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ayuda-trabajadores-columna {
+  margin: 6px 0 8px;
+  color: #666;
+  font-size: 0.78em;
+}
+
+.lista-trabajadores-columna {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #d9e7de;
+  border-radius: 6px;
+  background: #f8fcf9;
+}
+
+.opcion-trabajador-columna {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  margin: 0;
+  border-bottom: 1px solid #e7f0ea;
+  color: #2d4f3d;
+  font-size: 0.86em;
+  cursor: pointer;
+}
+
+.opcion-trabajador-columna:last-child {
+  border-bottom: none;
+}
+
+.opcion-trabajador-columna:hover {
+  background: #eaf5ee;
+}
+
+.opcion-trabajador-columna input {
+  accent-color: #2E7D5B;
 }
 
 .dias-mini-grid {
