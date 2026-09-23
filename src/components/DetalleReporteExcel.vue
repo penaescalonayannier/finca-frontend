@@ -50,10 +50,10 @@
           <button @click="abrirModalAgregarTrabajador" class="btn-accion btn-agregar-trabajador" :disabled="dias.length === 0">
             + Trabajador
           </button>
-          <button @click="definirDiasLaborables" class="btn-accion btn-definir-laborables" :disabled="!tieneDiasLaborables || guardando">
+          <button @click="definirDiasLaborables" class="btn-accion btn-definir-laborables" :disabled="dias.length === 0 || guardando">
             {{ guardando ? 'Aplicando...' : 'L-V 8h' }}
           </button>
-          <button @click="definirDiasLaborables4h" class="btn-accion btn-definir-laborables-4h" :disabled="!tieneDiasLaborables || guardando">
+          <button @click="definirDiasLaborables4h" class="btn-accion btn-definir-laborables-4h" :disabled="dias.length === 0 || guardando">
             {{ guardando ? 'Aplicando...' : 'L-V 4h' }}
           </button>
           <button @click="definirSabados" class="btn-accion btn-definir-sabados" :disabled="!tieneSabados || guardando">
@@ -559,16 +559,6 @@ const tieneDomingos = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
     return d.getDay() === 0
-  })
-}) && trabajadoresUnicos.value.length > 0
-
-// Verificar si hay días laborables y trabajadores en el reporte. Un día añadido
-// después puede no tener aún sus registros TrabajadorDia, que se crean al aplicar.
-const tieneDiasLaborables = computed(() => {
-  return dias.value.some(dia => {
-    const d = new Date(dia.fecha + 'T00:00:00')
-    const dayOfWeek = d.getDay()
-    return dayOfWeek >= 1 && dayOfWeek <= 5
   })
 }) && trabajadoresUnicos.value.length > 0
 
