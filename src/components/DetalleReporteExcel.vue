@@ -89,7 +89,7 @@
                   <button
                     @click.stop="abrirModalHorasColumna(dia)"
                     class="btn-aplicar-horas-columna"
-                    :disabled="!dia.trabajadores?.length || guardando"
+                    :disabled="trabajadoresUnicos.length === 0 || guardando"
                     title="Definir horas para todos los trabajadores de este día"
                     aria-label="Definir horas para toda la columna"
                   >⏱</button>
@@ -546,33 +546,34 @@ const totalHorasReporte = computed(() => {
   return total.toFixed(1)
 })
 
-// Verificar si hay sábados con trabajadores en el reporte
+// Verificar si hay sábados y trabajadores en el reporte.
 const tieneSabados = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
-    return d.getDay() === 6 && dia.trabajadores && dia.trabajadores.length > 0
+    return d.getDay() === 6
   })
-})
+}) && trabajadoresUnicos.value.length > 0
 
-// Verificar si hay domingos con trabajadores en el reporte
+// Verificar si hay domingos y trabajadores en el reporte.
 const tieneDomingos = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
-    return d.getDay() === 0 && dia.trabajadores && dia.trabajadores.length > 0
+    return d.getDay() === 0
   })
-})
+}) && trabajadoresUnicos.value.length > 0
 
-// Verificar si hay días laborables (L-V) con trabajadores en el reporte
+// Verificar si hay días laborables y trabajadores en el reporte. Un día añadido
+// después puede no tener aún sus registros TrabajadorDia, que se crean al aplicar.
 const tieneDiasLaborables = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
     const dayOfWeek = d.getDay()
-    return dayOfWeek >= 1 && dayOfWeek <= 5 && dia.trabajadores && dia.trabajadores.length > 0
+    return dayOfWeek >= 1 && dayOfWeek <= 5
   })
-})
+}) && trabajadoresUnicos.value.length > 0
 
 const trabajadoresEnColumna = computed(() =>
-  diaHorasSeleccionado.value?.trabajadores?.filter(trabajador => Boolean(trabajador.id)).length || 0
+  diaHorasSeleccionado.value ? trabajadoresUnicos.value.length : 0
 )
 
 // Obtener el registro TrabajadorDia
@@ -893,13 +894,13 @@ const eliminarTrabajadorDeReporte = async (trabajador: TrabajadorResumen) => {
 
 const abrirModalHorasColumna = (dia: DiaTrabajo) => {
   const primerTrabajador = dia.trabajadores?.find(trabajador => trabajador.id)
-  if (!primerTrabajador) {
-    alert('No hay trabajadores registrados para este día')
+  if (trabajadoresUnicos.value.length === 0) {
+    alert('No hay trabajadores registrados en el reporte')
     return
   }
 
   diaHorasSeleccionado.value = dia
-  horasColumna.value = primerTrabajador.horas || '8'
+  horasColumna.value = primerTrabajador?.horas || '8'
   mostrarModalHorasColumna.value = true
 }
 
@@ -920,27 +921,20 @@ const aplicarHorasColumna = async () => {
     return
   }
 
-  const registros = (dia.trabajadores || []).filter(
-    (trabajador): trabajador is TrabajadorDia & { id: string } => Boolean(trabajador.id)
-  )
-  if (registros.length === 0) {
-    alert('No hay trabajadores registrados para este día')
+  const trabajadores = trabajadoresUnicos.value
+  if (trabajadores.length === 0) {
+    alert('No hay trabajadores registrados en el reporte')
     return
   }
 
-  if (!confirm(`¿Aplicar ${horas} hora(s) a los ${registros.length} trabajador(es) del ${formatDateFull(dia.fecha)}? La norma actual se conservará.`)) {
+  if (!confirm(`¿Aplicar ${horas} hora(s) a los ${trabajadores.length} trabajador(es) del ${formatDateFull(dia.fecha)}? La norma actual se conservará.`)) {
     return
   }
 
   guardando.value = true
   ultimoGuardado.value = false
   try {
-    for (const trabajador of registros) {
-      await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
-        horas: String(horas),
-        norma: trabajador.norma || '0'
-      })
-    }
+    await aplicarHorasADia(dia, String(horas), true)
 
     await cargarDias()
     cerrarModalHorasColumna(true)
@@ -956,6 +950,33 @@ const aplicarHorasColumna = async () => {
 
 // ==================== DEFINIR DÍAS MASIVAMENTE ====================
 
+const aplicarHorasADia = async (dia: DiaTrabajo, horas: string, conservarNorma = false) => {
+  if (!dia.id) return
+
+  for (const trabajador of trabajadoresUnicos.value) {
+    const registro = getTrabajadorDia(trabajador.id, dia)
+    const norma = conservarNorma ? (registro?.norma || '0') : '0'
+
+    if (registro?.id) {
+      await DiaTrabajoService.actualizarTrabajadorDia(registro.id, { horas, norma })
+    } else {
+      // Los días agregados posteriormente no tienen filas todavía. Se crean al
+      // aplicar la acción masiva para que la columna reciba el valor solicitado.
+      await DiaTrabajoService.agregarTrabajadorADia(dia.id, {
+        trabajadorId: trabajador.id,
+        horas,
+        norma
+      })
+    }
+  }
+}
+
+const aplicarHorasADias = async (diasObjetivo: DiaTrabajo[], horas: string) => {
+  for (const dia of diasObjetivo) {
+    await aplicarHorasADia(dia, horas)
+  }
+}
+
 const definirDiasLaborables = async () => {
   // Obtener días laborables (lunes a viernes)
   const laborables = dias.value.filter(dia => {
@@ -969,14 +990,10 @@ const definirDiasLaborables = async () => {
     return
   }
 
-  // Contar trabajadores a actualizar
-  let totalTrabajadores = 0
-  laborables.forEach(dia => {
-    totalTrabajadores += dia.trabajadores?.length || 0
-  })
+  const totalTrabajadores = laborables.length * trabajadoresUnicos.value.length
 
   if (totalTrabajadores === 0) {
-    alert('No hay trabajadores en los días laborables')
+    alert('No hay trabajadores en el reporte')
     return
   }
 
@@ -986,16 +1003,7 @@ const definirDiasLaborables = async () => {
 
   guardando.value = true
   try {
-    for (const dia of laborables) {
-      for (const trabajador of (dia.trabajadores || [])) {
-        if (trabajador.id) {
-          await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
-            horas: '8',
-            norma: '0'
-          })
-        }
-      }
-    }
+    await aplicarHorasADias(laborables, '8')
 
     await cargarDias()
 
@@ -1022,14 +1030,10 @@ const definirDiasLaborables4h = async () => {
     return
   }
 
-  // Contar trabajadores a actualizar
-  let totalTrabajadores = 0
-  laborables.forEach(dia => {
-    totalTrabajadores += dia.trabajadores?.length || 0
-  })
+  const totalTrabajadores = laborables.length * trabajadoresUnicos.value.length
 
   if (totalTrabajadores === 0) {
-    alert('No hay trabajadores en los días laborables')
+    alert('No hay trabajadores en el reporte')
     return
   }
 
@@ -1039,16 +1043,7 @@ const definirDiasLaborables4h = async () => {
 
   guardando.value = true
   try {
-    for (const dia of laborables) {
-      for (const trabajador of (dia.trabajadores || [])) {
-        if (trabajador.id) {
-          await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
-            horas: '4',
-            norma: '0'
-          })
-        }
-      }
-    }
+    await aplicarHorasADias(laborables, '4')
 
     await cargarDias()
 
@@ -1074,14 +1069,10 @@ const definirSabados = async () => {
     return
   }
 
-  // Contar trabajadores a actualizar
-  let totalTrabajadores = 0
-  sabados.forEach(dia => {
-    totalTrabajadores += dia.trabajadores?.length || 0
-  })
+  const totalTrabajadores = sabados.length * trabajadoresUnicos.value.length
 
   if (totalTrabajadores === 0) {
-    alert('No hay trabajadores en los días sábado')
+    alert('No hay trabajadores en el reporte')
     return
   }
 
@@ -1091,16 +1082,7 @@ const definirSabados = async () => {
 
   guardando.value = true
   try {
-    for (const dia of sabados) {
-      for (const trabajador of (dia.trabajadores || [])) {
-        if (trabajador.id) {
-          await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
-            horas: '4',
-            norma: '0'
-          })
-        }
-      }
-    }
+    await aplicarHorasADias(sabados, '4')
 
     await cargarDias()
 
@@ -1126,14 +1108,10 @@ const definirDomingos = async () => {
     return
   }
 
-  // Contar trabajadores a actualizar
-  let totalTrabajadores = 0
-  domingos.forEach(dia => {
-    totalTrabajadores += dia.trabajadores?.length || 0
-  })
+  const totalTrabajadores = domingos.length * trabajadoresUnicos.value.length
 
   if (totalTrabajadores === 0) {
-    alert('No hay trabajadores en los días domingo')
+    alert('No hay trabajadores en el reporte')
     return
   }
 
@@ -1143,16 +1121,7 @@ const definirDomingos = async () => {
 
   guardando.value = true
   try {
-    for (const dia of domingos) {
-      for (const trabajador of (dia.trabajadores || [])) {
-        if (trabajador.id) {
-          await DiaTrabajoService.actualizarTrabajadorDia(trabajador.id, {
-            horas: '4',
-            norma: '0'
-          })
-        }
-      }
-    }
+    await aplicarHorasADias(domingos, '4')
 
     await cargarDias()
 
