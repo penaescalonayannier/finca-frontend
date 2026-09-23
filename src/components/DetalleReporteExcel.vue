@@ -546,21 +546,21 @@ const totalHorasReporte = computed(() => {
   return total.toFixed(1)
 })
 
-// Verificar si hay sábados y trabajadores en el reporte.
+// Verificar si hay sábados. Las filas de trabajadores faltantes se crean al aplicar.
 const tieneSabados = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
     return d.getDay() === 6
   })
-}) && trabajadoresUnicos.value.length > 0
+})
 
-// Verificar si hay domingos y trabajadores en el reporte.
+// Verificar si hay domingos. Las filas de trabajadores faltantes se crean al aplicar.
 const tieneDomingos = computed(() => {
   return dias.value.some(dia => {
     const d = new Date(dia.fecha + 'T00:00:00')
     return d.getDay() === 0
   })
-}) && trabajadoresUnicos.value.length > 0
+})
 
 const trabajadoresEnColumna = computed(() =>
   diaHorasSeleccionado.value ? trabajadoresUnicos.value.length : 0
