@@ -110,6 +110,13 @@
                   <span class="trabajador-nombre">{{ trabajador.nombre }}</span>
                   <span class="trabajador-cargo" v-if="trabajador.cargo">{{ trabajador.cargo }}</span>
                   <button
+                    @click.stop="abrirModalHorasFila(trabajador)"
+                    class="btn-aplicar-horas-fila"
+                    :disabled="guardando || dias.length === 0"
+                    title="Definir horas para este trabajador en todos los días"
+                    aria-label="Definir horas para toda la fila del trabajador"
+                  >⏱</button>
+                  <button
                     @click="eliminarTrabajadorDeReporte(trabajador)"
                     class="btn-eliminar-trabajador"
                     title="Eliminar de todo el reporte"
@@ -403,6 +410,42 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal definir horas para una fila/trabajador -->
+    <div v-if="mostrarModalHorasFila" class="modal-overlay" @click.self="cerrarModalHorasFila">
+      <div class="modal-box modal-horas-columna">
+        <div class="modal-header">
+          <h3>Definir horas del trabajador</h3>
+          <button @click="cerrarModalHorasFila" class="btn-cerrar-modal" :disabled="guardando">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="texto-modal-horas">
+            Se aplicará el valor a la sección <strong>Horas</strong> de <strong>{{ trabajadorHorasSeleccionado?.nombre }}</strong>
+            en los {{ diasOrdenados.length }} día(s) del reporte. La norma existente se conservará sin cambios.
+          </p>
+          <div class="form-group">
+            <label for="horas-fila">Horas a aplicar</label>
+            <input
+              id="horas-fila"
+              v-model="horasFila"
+              type="number"
+              min="0"
+              max="24"
+              step="0.5"
+              class="input-numero"
+              :disabled="guardando"
+              @keyup.enter="aplicarHorasFila"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button @click="cerrarModalHorasFila" class="btn-cancelar" :disabled="guardando">Cancelar</button>
+          <button @click="aplicarHorasFila" class="btn-guardar" :disabled="guardando">
+            {{ guardando ? 'Aplicando...' : 'Aplicar a toda la fila' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -456,6 +499,11 @@ const guardandoTrabajador = ref(false)
 const mostrarModalHorasColumna = ref(false)
 const diaHorasSeleccionado = ref<DiaTrabajo | null>(null)
 const horasColumna = ref('8')
+
+// Aplicación masiva de horas para un trabajador/fila específica
+const mostrarModalHorasFila = ref(false)
+const trabajadorHorasSeleccionado = ref<TrabajadorResumen | null>(null)
+const horasFila = ref('8')
 
 // Meses en español para mapeo
 const mesesMap: Record<string, number> = {
@@ -933,6 +981,79 @@ const aplicarHorasColumna = async () => {
   } catch (error: any) {
     console.error('Error al definir horas para la columna:', error)
     alert(error.response?.data?.message || 'No fue posible aplicar las horas a toda la columna')
+  } finally {
+    guardando.value = false
+  }
+}
+
+// ==================== DEFINIR HORAS POR FILA ====================
+
+const abrirModalHorasFila = (trabajador: TrabajadorResumen) => {
+  if (diasOrdenados.value.length === 0) {
+    alert('No hay días registrados en el reporte')
+    return
+  }
+
+  const primerRegistro = diasOrdenados.value
+    .map(dia => getTrabajadorDia(trabajador.id, dia))
+    .find((registro): registro is TrabajadorDia => Boolean(registro))
+
+  trabajadorHorasSeleccionado.value = trabajador
+  horasFila.value = primerRegistro?.horas || '8'
+  mostrarModalHorasFila.value = true
+}
+
+const cerrarModalHorasFila = (forzar = false) => {
+  if (guardando.value && !forzar) return
+  mostrarModalHorasFila.value = false
+  trabajadorHorasSeleccionado.value = null
+  horasFila.value = '8'
+}
+
+const aplicarHorasFila = async () => {
+  const trabajador = trabajadorHorasSeleccionado.value
+  const horas = Number(horasFila.value)
+
+  if (!trabajador || !Number.isFinite(horas) || horas < 0 || horas > 24) {
+    alert('Las horas deben ser un número entre 0 y 24')
+    return
+  }
+
+  const diasObjetivo = diasOrdenados.value.filter(dia => Boolean(dia.id))
+  if (diasObjetivo.length === 0) {
+    alert('No hay días registrados en el reporte')
+    return
+  }
+
+  if (!confirm(`¿Aplicar ${horas} hora(s) a ${trabajador.nombre} en los ${diasObjetivo.length} día(s) del reporte? La norma actual se conservará.`)) {
+    return
+  }
+
+  guardando.value = true
+  ultimoGuardado.value = false
+  try {
+    for (const dia of diasObjetivo) {
+      const registro = getTrabajadorDia(trabajador.id, dia)
+      const norma = registro?.norma || '0'
+
+      if (registro?.id) {
+        await DiaTrabajoService.actualizarTrabajadorDia(registro.id, { horas: String(horas), norma })
+      } else {
+        await DiaTrabajoService.agregarTrabajadorADia(dia.id!, {
+          trabajadorId: trabajador.id,
+          horas: String(horas),
+          norma
+        })
+      }
+    }
+
+    await cargarDias()
+    cerrarModalHorasFila(true)
+    ultimoGuardado.value = true
+    setTimeout(() => { ultimoGuardado.value = false }, 2000)
+  } catch (error: any) {
+    console.error('Error al definir horas para la fila:', error)
+    alert(error.response?.data?.message || 'No fue posible aplicar las horas a toda la fila')
   } finally {
     guardando.value = false
   }
@@ -1798,12 +1919,40 @@ thead .col-total {
   justify-content: center;
 }
 
-.col-trabajador:hover .btn-eliminar-trabajador {
+.btn-aplicar-horas-fila {
+  position: absolute;
+  right: 21px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1D5A3F;
+  border-radius: 50%;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.col-trabajador:hover .btn-eliminar-trabajador,
+.col-trabajador:hover .btn-aplicar-horas-fila,
+.btn-aplicar-horas-fila:focus-visible {
   opacity: 1;
 }
 
 .btn-eliminar-trabajador:hover {
   background: #c0392b;
+}
+
+.btn-aplicar-horas-fila:hover:not(:disabled) {
+  background: #fff;
+  transform: translateY(-50%) scale(1.12);
+}
+
+.btn-aplicar-horas-fila:disabled {
+  cursor: not-allowed;
 }
 
 .celda-datos {
