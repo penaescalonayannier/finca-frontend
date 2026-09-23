@@ -46,6 +46,9 @@
       <button @click="exportarPdfPorGrupo" class="btn-pdf-grupo" :disabled="isExportandoPdfGrupo">
         {{ isExportandoPdfGrupo ? 'Generando...' : 'PDF por Grupo' }}
       </button>
+      <button @click="exportarPdfNivelCultural" class="btn-pdf-nivel-cultural" :disabled="isExportandoPdfNivelCultural">
+        {{ isExportandoPdfNivelCultural ? 'Generando...' : 'PDF nivel cultural' }}
+      </button>
       <button v-if="trabajadoresSeleccionados.length > 0" @click="exportarTrabajadores" class="btn-exportar">
         Exportar ({{ trabajadoresSeleccionados.length }})
       </button>
@@ -363,6 +366,7 @@ const trabajadoresSeleccionados = ref<string[]>([])
 const isExportando = ref(false)
 const isExportandoPdf = ref(false)
 const isExportandoPdfGrupo = ref(false)
+const isExportandoPdfNivelCultural = ref(false)
 
 const mostrarModalCrear = ref(false)
 const mostrarModalEditar = ref(false)
@@ -1017,6 +1021,88 @@ const exportarPdfPorGrupo = async () => {
   }
 }
 
+const exportarPdfNivelCultural = async () => {
+  isExportandoPdfNivelCultural.value = true
+  try {
+    const response = await TrabajadorService.buscarTrabajadores({
+      page: 0,
+      size: 10000,
+      filter: [{ key: 'activo', operator: 'EQUALS', value: 'true', logicalOperation: 'AND' }],
+      sortBy: 'nombre',
+      sortType: 'ASC'
+    })
+
+    const data = response.data as Record<string, unknown>
+    const trabajadoresReporte = data.data && Array.isArray(data.data)
+      ? data.data as Trabajador[]
+      : data.content && Array.isArray(data.content)
+        ? data.content as Trabajador[]
+        : []
+
+    if (trabajadoresReporte.length === 0) {
+      notify.warning('Sin datos', 'No hay trabajadores activos para exportar')
+      return
+    }
+
+    const trabajadoresOrdenados = [...trabajadoresReporte].sort((a, b) =>
+      (a.nombre || '').localeCompare(b.nombre || '', 'es')
+    )
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const fechaActual = new Date().toLocaleDateString('es-ES', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+
+    doc.setFontSize(17)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Relación de Nivel Cultural de Trabajadores', pageWidth / 2, 18, { align: 'center' })
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Generado: ${fechaActual}`, pageWidth / 2, 25, { align: 'center' })
+    doc.text(`Trabajadores activos: ${trabajadoresOrdenados.length}`, pageWidth / 2, 31, { align: 'center' })
+
+    autoTable(doc, {
+      startY: 38,
+      head: [['#', 'Nombre y apellidos', 'RUC', 'Nivel cultural']],
+      body: trabajadoresOrdenados.map((trabajador, indice) => [
+        String(indice + 1),
+        trabajador.nombre || '',
+        trabajador.ruc || '',
+        trabajador.nivelCultural || 'No registrado'
+      ]),
+      theme: 'grid',
+      headStyles: {
+        fillColor: [46, 125, 91],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      bodyStyles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 75 },
+        2: { cellWidth: 38 },
+        3: { cellWidth: 55 }
+      },
+      margin: { left: 15, right: 15 },
+      didDrawPage: () => {
+        doc.setFontSize(8)
+        doc.setTextColor(128, 128, 128)
+        doc.text(`Página ${doc.getNumberOfPages()}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' })
+        doc.setTextColor(0, 0, 0)
+      }
+    })
+
+    doc.save(`nivel_cultural_trabajadores_${new Date().getTime()}.pdf`)
+    notify.success('PDF generado', 'El reporte de nivel cultural se descargó correctamente')
+  } catch (error) {
+    console.error('Error al generar el PDF de nivel cultural:', error)
+    notify.error('Error', 'No se pudo generar el reporte de nivel cultural')
+  } finally {
+    isExportandoPdfNivelCultural.value = false
+  }
+}
+
 onMounted(() => {
   cargarTrabajadores()
 })
@@ -1134,7 +1220,7 @@ h2 {
 .btn-crear { background-color: #27ae60; color: white; }
 .btn-importar { background-color: var(--color-primary); color: white; }
 
-.btn-buscar, .btn-crear, .btn-importar, .btn-exportar, .btn-pdf {
+.btn-buscar, .btn-crear, .btn-importar, .btn-exportar, .btn-pdf, .btn-pdf-nivel-cultural {
   padding: 10px 20px;
   border: none;
   border-radius: 4px;
@@ -1149,6 +1235,10 @@ h2 {
 .btn-pdf-grupo { background-color: #16a085; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
 .btn-pdf-grupo:hover:not(:disabled) { background-color: #1abc9c; }
 .btn-pdf-grupo:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+.btn-pdf-nivel-cultural { background-color: #2e7d5b; color: white; }
+.btn-pdf-nivel-cultural:hover:not(:disabled) { background-color: #256b4d; }
+.btn-pdf-nivel-cultural:disabled { background-color: #bdc3c7; cursor: not-allowed; }
 
 .btn-buscar:hover { background-color: #2980b9; }
 .btn-crear:hover { background-color: #219a52; }
