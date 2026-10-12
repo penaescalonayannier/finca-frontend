@@ -218,6 +218,7 @@
             <tr>
               <th>Trabajador</th>
               <th>Producto</th>
+              <th>Actividad agrícola</th>
               <th>Cantidad</th>
               <th>Precio Unit.</th>
               <th>Subtotal</th>
@@ -227,6 +228,7 @@
             <tr v-for="item in salidaSeleccionada?.items" :key="item.id">
               <td>{{ item.trabajadorNombre }}</td>
               <td>{{ item.productoName || salidaSeleccionada?.productoName }}</td>
+              <td>{{ item.laborName ? `${item.laborCode ? `${item.laborCode} · ` : ''}${item.laborName}` : '—' }}</td>
               <td class="cantidad-col">{{ item.cantidad }}</td>
               <td class="precio-col">${{ (item.precio || 0).toFixed(2) }}</td>
               <td class="subtotal-col">${{ ((item.cantidad || 0) * (item.precio || 0)).toFixed(2) }}</td>

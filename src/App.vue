@@ -118,6 +118,9 @@
             <router-link to="/almacenes" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-store"></i> Almacenes
             </router-link>
+            <router-link to="/control-combustible" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-gas-pump"></i> Control de combustible
+            </router-link>
             <router-link to="/conteos-fisicos-almacen" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-clipboard-check"></i> Inventario físico
             </router-link>
@@ -185,6 +188,9 @@
             <router-link to="/centros-costo" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-folder-tree"></i> Centros de Costo
             </router-link>
+            <router-link to="/labores-agricolas" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-wheat-awn"></i> Labores Agrícolas
+            </router-link>
             <router-link to="/contabilidad/reglas" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Reglas Contabilización
             </router-link>
@@ -219,6 +225,9 @@
             </router-link>
             <router-link to="/consecutivos-documentales" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-list-ol"></i> Consecutivos documentales
+            </router-link>
+            <router-link to="/plan-ingreso-venta" class="nav-item sub" @click="closeMobileMenu">
+              <i class="fa-solid fa-chart-line"></i> Plan de Ingresos por Ventas
             </router-link>
             <router-link to="/reportes/ventas-pagos" class="nav-item sub" @click="closeMobileMenu">
               <i class="fa-solid fa-receipt"></i> Resumen Ventas/Pagos

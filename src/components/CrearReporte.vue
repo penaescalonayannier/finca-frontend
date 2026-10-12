@@ -61,6 +61,52 @@
         </div>
       </div>
 
+      <!-- Datos de producción: únicamente para actividades marcadas como cosecha -->
+      <section v-if="esActividadCosecha" class="cosecha-section">
+        <div class="cosecha-heading">
+          <span class="cosecha-icon">🌾</span>
+          <div>
+            <h4>Producción cosechada</h4>
+            <p>Registre el producto, la cantidad y el precio de referencia que quedarán guardados en este reporte.</p>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="productoCosechado">Producto cosechado *</label>
+            <select id="productoCosechado" v-model="form.productoId" required class="form-select" @change="onProductoCosechadoChange">
+              <option value="">Seleccione un producto</option>
+              <option v-for="producto in productos" :key="producto.id" :value="producto.id">
+                {{ producto.name }}{{ producto.code ? ` (${producto.code})` : '' }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-half">
+            <label for="cantidadCosechada">Cantidad cosechada *</label>
+            <input id="cantidadCosechada" v-model.number="form.cantidadCosechada" type="number" min="0.0001" step="any" required placeholder="0.00" />
+          </div>
+          <div class="form-group form-group-half">
+            <label for="unidadMedida">Unidad de medida</label>
+            <input id="unidadMedida" :value="unidadMedidaCosecha" type="text" disabled class="input-disabled" placeholder="Se toma del producto" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tipoPrecioReferencia">Precio de referencia *</label>
+            <select id="tipoPrecioReferencia" v-model="form.tipoPrecioReferencia" required class="form-select" :disabled="!productoCosechado" @change="onTipoPrecioReferenciaChange">
+              <option value="">Seleccione el precio de referencia</option>
+              <option v-for="precio in opcionesPrecio" :key="precio.tipo" :value="precio.tipo">
+                {{ precio.etiqueta }} — {{ formatearImporte(precio.valor) }}
+              </option>
+            </select>
+            <small v-if="form.precioUnitarioReferencia !== undefined" class="hint">
+              Se guardará como referencia: <strong>{{ formatearImporte(form.precioUnitarioReferencia) }}</strong> por {{ unidadMedidaCosecha }}.
+            </small>
+          </div>
+        </div>
+      </section>
+
       <!-- Tipo de Animal (solo si el TipoReporte es VAQUERIA) -->
       <div v-if="mostrarTipoAnimal" class="form-row">
         <div class="form-group">
@@ -162,9 +208,11 @@
           <input
             id="norma"
             v-model="form.norma"
-            type="text"
+            type="number"
+            min="0"
+            step="any"
             required
-            placeholder="Ej: N-001"
+            placeholder="Ej: 8.5"
           />
         </div>
       </div>
@@ -246,12 +294,14 @@ import TrabajadorService from '@/services/TrabajadorService'
 import TipoCultivoService from '@/services/TipoCultivoService'
 import TipoReporteService from '@/services/TipoReporteService'
 import TipoAnimalService from '@/services/TipoAnimalService'
+import ProductoService from '@/services/ProductoService'
 import type { Reporte, ReporteRequest } from '@/types/Reporte'
 import type { DiaTrabajo, TrabajadorDia } from '@/types/DiaTrabajo'
 import type { Trabajador } from '@/types/Trabajador'
 import type { TipoCultivo, CategoriaTipoCultivo } from '@/types/TipoCultivo'
 import type { TipoReporte } from '@/types/TipoReporte'
 import type { TipoAnimal } from '@/types/TipoAnimal'
+import type { Producto } from '@/types/Producto'
 import type { AxiosError } from 'axios'
 
 const props = defineProps<{
@@ -271,6 +321,7 @@ const diasOriginales = ref<DiaTrabajo[]>([])
 const tiposCultivo = ref<TipoCultivo[]>([])
 const tiposReporte = ref<TipoReporte[]>([])
 const tiposAnimal = ref<TipoAnimal[]>([])
+const productos = ref<Producto[]>([])
 
 // Tipo de reporte seleccionado
 const tipoReporteSeleccionado = computed(() => {
@@ -311,6 +362,24 @@ const tipoCultivoSeleccionado = computed(() => {
   return tiposCultivo.value.find(tc => tc.id === form.value.tipoCultivoId) || null
 })
 
+const esActividadCosecha = computed(() => tipoCultivoSeleccionado.value?.esCosecha === true)
+
+const productoCosechado = computed(() =>
+  productos.value.find(producto => producto.id === form.value.productoId) || null
+)
+
+const unidadMedidaCosecha = computed(() => productoCosechado.value?.unidadMedida || form.value.unidadMedidaSnapshot || '')
+
+const opcionesPrecio = computed(() => {
+  const producto = productoCosechado.value
+  if (!producto) return []
+  return [
+    { tipo: 'GENERAL', etiqueta: 'Precio general', valor: producto.price },
+    { tipo: 'TRABAJADOR', etiqueta: 'Precio trabajador', valor: producto.priceTrabajador },
+    { tipo: 'COMEDOR', etiqueta: 'Precio comedor', valor: producto.priceComedor }
+  ]
+})
+
 // Si el tipo de reporte requiere bloque/campo
 const requiereCampo = computed(() => {
   // Prioridad: TipoReporte.requiereCampo > TipoCultivo.requiereCampo
@@ -336,6 +405,10 @@ const onTipoReporteChange = () => {
     }
   }
 
+  if (!esActividadCosecha.value) {
+    limpiarDatosCosecha()
+  }
+
   // Limpiar campos si no se requieren
   if (!requiereCampo.value) {
     form.value.bloque = ''
@@ -351,7 +424,36 @@ const onTipoCultivoChange = () => {
     form.value.campo = ''
     form.value.area = ''
   }
+
+  if (!esActividadCosecha.value) {
+    limpiarDatosCosecha()
+  }
 }
+
+const limpiarDatosCosecha = () => {
+  form.value.productoId = undefined
+  form.value.cantidadCosechada = undefined
+  form.value.unidadMedidaSnapshot = undefined
+  form.value.precioUnitarioReferencia = undefined
+  form.value.tipoPrecioReferencia = undefined
+}
+
+const onProductoCosechadoChange = () => {
+  form.value.unidadMedidaSnapshot = productoCosechado.value?.unidadMedida
+  form.value.tipoPrecioReferencia = undefined
+  form.value.precioUnitarioReferencia = undefined
+}
+
+const onTipoPrecioReferenciaChange = () => {
+  const precio = opcionesPrecio.value.find(opcion => opcion.tipo === form.value.tipoPrecioReferencia)
+  form.value.precioUnitarioReferencia = precio?.valor
+}
+
+const formatearImporte = (importe: number): string => new Intl.NumberFormat('es-CU', {
+  style: 'currency',
+  currency: 'CUP',
+  minimumFractionDigits: 2
+}).format(importe || 0)
 
 // Trabajadores ordenados alfabéticamente
 const trabajadoresOrdenados = computed(() => {
@@ -443,6 +545,26 @@ const cargarTiposAnimal = async () => {
   }
 }
 
+const cargarProductos = async () => {
+  try {
+    const response = await ProductoService.buscarProductos({ size: 999, sortBy: 'name', sortType: 'ASC' })
+    productos.value = (response.data.data || []).filter(producto => producto.active)
+  } catch (error) {
+    console.error('Error al cargar productos:', error)
+  }
+}
+
+const asegurarProductoSeleccionado = async () => {
+  const productoId = form.value.productoId
+  if (!productoId || productos.value.some(producto => producto.id === productoId)) return
+  try {
+    const response = await ProductoService.obtenerProductoPorId(productoId)
+    productos.value.push(response.data)
+  } catch (error) {
+    console.error('Error al cargar el producto del reporte:', error)
+  }
+}
+
 const cargarTrabajadores = async () => {
   try {
     const response = await TrabajadorService.buscarTrabajadores({ size: 999 })
@@ -490,6 +612,11 @@ const cargarDatos = async () => {
       tipoReporteId: reporteCompleto.tipoReporteId || '',
       tipoCultivoId: reporteCompleto.tipoCultivoId || '',
       tipoAnimalId: reporteCompleto.tipoAnimalId || undefined,
+      productoId: reporteCompleto.productoId,
+      cantidadCosechada: reporteCompleto.cantidadCosechada,
+      unidadMedidaSnapshot: reporteCompleto.unidadMedidaSnapshot,
+      precioUnitarioReferencia: reporteCompleto.precioUnitarioReferencia,
+      tipoPrecioReferencia: reporteCompleto.tipoPrecioReferencia,
       codigo: reporteCompleto.codigo || '',
       bloque: reporteCompleto.bloque || '',
       campo: reporteCompleto.campo || '',
@@ -501,6 +628,8 @@ const cargarDatos = async () => {
       trabajadorResponsableId: reporteCompleto.trabajadorResponsableId || '',
       dias: []
     }
+
+    await asegurarProductoSeleccionado()
 
     if (isEditing.value && props.reporte.id) {
       await cargarDiasDelReporte(props.reporte.id)
@@ -597,6 +726,23 @@ const guardar = async () => {
     return
   }
 
+  if (esActividadCosecha.value) {
+    if (!form.value.productoId) {
+      alert('El producto cosechado es obligatorio')
+      return
+    }
+    if (!form.value.cantidadCosechada || form.value.cantidadCosechada <= 0) {
+      alert('La cantidad cosechada debe ser mayor que cero')
+      return
+    }
+    if (!form.value.tipoPrecioReferencia || form.value.precioUnitarioReferencia === undefined) {
+      alert('Seleccione el precio de referencia de la cosecha')
+      return
+    }
+  } else {
+    limpiarDatosCosecha()
+  }
+
   // Validar bloque/campo solo si el tipo de cultivo lo requiere
   if (requiereCampo.value) {
     if (!form.value.bloque.trim()) {
@@ -613,8 +759,8 @@ const guardar = async () => {
     }
   }
 
-  if (!form.value.norma.trim()) {
-    alert('La norma es obligatoria')
+  if (numeroNoNegativo(String(form.value.norma)) === null) {
+    alert('La norma es obligatoria y debe ser un número decimal válido')
     return
   }
   if (!form.value.year.trim()) {
@@ -735,6 +881,7 @@ onMounted(async () => {
   await cargarTiposReporte()
   await cargarTiposCultivo()
   await cargarTiposAnimal()
+  await cargarProductos()
   await cargarTrabajadores()
   await cargarDatos()
   // Cargar el próximo código si es creación
@@ -806,6 +953,51 @@ h3 {
   font-family: monospace;
   font-weight: 600;
   letter-spacing: 1px;
+}
+
+.cosecha-section {
+  margin: 20px 0;
+  padding: 18px;
+  border: 1px solid #b9dfc1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f4fbf4 0%, #fffdf5 100%);
+}
+
+@media (min-width: 760px) {
+  .cosecha-section .form-row:first-of-type,
+  .cosecha-section .form-row:last-of-type {
+    display: inline-flex;
+    width: calc(50% - 8px);
+    vertical-align: top;
+  }
+
+  .cosecha-section .form-row:first-of-type { margin-right: 12px; }
+  .cosecha-section .form-row:first-of-type .form-group,
+  .cosecha-section .form-row:last-of-type .form-group { width: 100%; }
+}
+
+.cosecha-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cosecha-icon {
+  font-size: 1.45em;
+  line-height: 1;
+}
+
+.cosecha-heading h4 {
+  margin: 0 0 4px;
+  color: #27643a;
+}
+
+.cosecha-heading p {
+  margin: 0;
+  color: #5d6d62;
+  font-size: 0.9em;
+  line-height: 1.35;
 }
 
 /* Días Section */
@@ -1030,6 +1222,10 @@ h3 {
   margin-top: 20px;
   padding-top: 15px;
   border-top: 1px solid #eee;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: white;
 }
 
 .btn-guardar {

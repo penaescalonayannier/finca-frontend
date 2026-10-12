@@ -91,7 +91,9 @@ class FincaService {
     // Transform PagedResponse to array for simpler consumption
     return {
       ...response,
-      data: response.data?.content || []
+      // El backend usa `data`; `content` se conserva por compatibilidad con
+      // respuestas paginadas anteriores.
+      data: (response.data as PagedResponse<Finca> & { data?: Finca[] }).data || response.data?.content || []
     } as AxiosResponse<Finca[]>
   }
 }

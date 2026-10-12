@@ -1,64 +1,89 @@
 <template>
   <div class="tipo-cultivo-list">
-    <div class="page-header">
-      <h1>Tipos de Cultivo</h1>
-      <p class="subtitle">Nomenclador de cultivos para reportes de trabajo</p>
-    </div>
-
-    <div class="actions-bar">
+    <header class="page-header">
+      <div class="header-copy">
+        <p class="eyebrow"><i class="fa-solid fa-seedling"></i> Nomencladores</p>
+        <h1>Tipos de cultivo</h1>
+        <p class="subtitle">Organiza los cultivos disponibles para los reportes de trabajo y sus reglas operativas.</p>
+      </div>
       <button class="btn btn-primary" @click="openModal()">
-        <i class="fa-solid fa-plus"></i> Nuevo Tipo de Cultivo
+        <i class="fa-solid fa-plus"></i>
+        Nuevo tipo de cultivo
       </button>
-    </div>
+    </header>
+
+    <section class="summary-grid" aria-label="Resumen de tipos de cultivo">
+      <article class="summary-card">
+        <span class="summary-icon icon-green"><i class="fa-solid fa-wheat-awn"></i></span>
+        <div><strong>{{ tiposCultivo.length }}</strong><span>Tipos registrados</span></div>
+      </article>
+      <article class="summary-card">
+        <span class="summary-icon icon-blue"><i class="fa-solid fa-circle-check"></i></span>
+        <div><strong>{{ totalActivos }}</strong><span>Activos</span></div>
+      </article>
+      <article class="summary-card">
+        <span class="summary-icon icon-orange"><i class="fa-solid fa-basket-shopping"></i></span>
+        <div><strong>{{ totalCosecha }}</strong><span>Actividades de cosecha</span></div>
+      </article>
+    </section>
 
     <div v-if="loading" class="loading">
       <div class="spinner"></div>
       <p>Cargando...</p>
     </div>
 
-    <div v-else class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Código</th>
-            <th>Nombre</th>
-            <th>Descripción</th>
-            <th>Requiere Campo</th>
-            <th>Estado</th>
-            <th>Orden</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="tipo in tiposCultivo" :key="tipo.id">
-            <td><code>{{ tipo.codigo }}</code></td>
-            <td>{{ tipo.nombre }}</td>
-            <td>{{ tipo.descripcion || '-' }}</td>
-            <td>
-              <span :class="['badge', tipo.requiereCampo ? 'badge-success' : 'badge-secondary']">
-                {{ tipo.requiereCampo ? 'Sí (Bloque/Campo)' : 'No' }}
-              </span>
-            </td>
-            <td>
-              <span :class="['badge', tipo.activo ? 'badge-active' : 'badge-inactive']">
-                {{ tipo.activo ? 'Activo' : 'Inactivo' }}
-              </span>
-            </td>
-            <td>{{ tipo.orden ?? '-' }}</td>
-            <td class="actions">
-              <button class="btn btn-sm btn-edit" @click="openModal(tipo)" title="Editar">
+    <div v-else class="cultivos-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Catálogo de cultivos</h2>
+          <p>Selecciona un cultivo para actualizar su configuración.</p>
+        </div>
+        <span class="result-count">{{ tiposCultivo.length }} registros</span>
+      </div>
+
+      <div v-if="tiposCultivo.length > 0" class="cultivos-grid">
+        <article v-for="tipo in tiposCultivo" :key="tipo.id" class="cultivo-card" :class="{ inactive: !tipo.activo }">
+          <div class="card-topline">
+            <code>{{ tipo.codigo }}</code>
+            <span :class="['category-pill', `category-${tipo.categoria.toLowerCase()}`]">{{ categoriaLabel(tipo.categoria) }}</span>
+          </div>
+
+          <h3>{{ tipo.nombre }}</h3>
+          <p class="card-description">{{ tipo.descripcion || 'Sin descripción registrada.' }}</p>
+
+          <div class="feature-list">
+            <span :class="['feature', { enabled: tipo.requiereCampo }]">
+              <i class="fa-solid fa-map-location-dot"></i>
+              {{ tipo.requiereCampo ? 'Requiere bloque y campo' : 'Sin bloque ni campo' }}
+            </span>
+            <span :class="['feature', 'harvest', { enabled: tipo.esCosecha }]">
+              <i class="fa-solid fa-basket-shopping"></i>
+              {{ tipo.esCosecha ? 'Actividad de cosecha' : 'No es cosecha' }}
+            </span>
+          </div>
+
+          <footer class="card-footer">
+            <div class="card-meta">
+              <span :class="['status-dot', { active: tipo.activo }]">{{ tipo.activo ? 'Activo' : 'Inactivo' }}</span>
+              <span>Orden {{ tipo.orden ?? '—' }}</span>
+            </div>
+            <div class="card-actions">
+              <button class="icon-button btn-edit" @click="openModal(tipo)" title="Editar tipo de cultivo">
                 <i class="fa-solid fa-pen"></i>
               </button>
-              <button class="btn btn-sm btn-delete" @click="confirmDelete(tipo)" title="Eliminar">
+              <button class="icon-button btn-delete" @click="confirmDelete(tipo)" title="Eliminar tipo de cultivo">
                 <i class="fa-solid fa-trash"></i>
               </button>
-            </td>
-          </tr>
-          <tr v-if="tiposCultivo.length === 0">
-            <td colspan="7" class="empty-message">No hay tipos de cultivo registrados</td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </footer>
+        </article>
+      </div>
+
+      <div v-else class="empty-message">
+        <i class="fa-solid fa-seedling"></i>
+        <span>No hay tipos de cultivo registrados</span>
+        <button class="empty-action" @click="openModal()">Crear el primero</button>
+      </div>
     </div>
 
     <!-- Modal -->
@@ -103,12 +128,29 @@
             ></textarea>
           </div>
           <div class="form-group">
+            <label for="categoria">Categoría *</label>
+            <select id="categoria" v-model="form.categoria" required>
+              <option value="CANNA">Caña</option>
+              <option value="VIANDA">Vianda</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="checkbox-label">
               <input type="checkbox" v-model="form.requiereCampo" />
               <span>Requiere selección de Bloque y Campo</span>
             </label>
             <small class="hint">
               Marcar para cultivos como Caña que necesitan identificar bloque y campo específico.
+            </small>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="form.esCosecha" />
+              <span>Es una actividad de cosecha</span>
+            </label>
+            <small class="hint">
+              Activa el control de producción terminada frente al salario de los trabajadores participantes.
             </small>
           </div>
           <div class="form-row">
@@ -160,9 +202,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import TipoCultivoService from '@/services/TipoCultivoService'
-import type { TipoCultivo, TipoCultivoRequest } from '@/types/TipoCultivo'
+import type { CategoriaTipoCultivo, TipoCultivo, TipoCultivoRequest } from '@/types/TipoCultivo'
 
 const tiposCultivo = ref<TipoCultivo[]>([])
 const loading = ref(false)
@@ -173,11 +215,22 @@ const showDeleteConfirm = ref(false)
 const isEditing = ref(false)
 const selectedTipo = ref<TipoCultivo | null>(null)
 
+const totalActivos = computed(() => tiposCultivo.value.filter(tipo => tipo.activo).length)
+const totalCosecha = computed(() => tiposCultivo.value.filter(tipo => tipo.esCosecha).length)
+
+const categoriaLabel = (categoria: CategoriaTipoCultivo): string => ({
+  CANNA: 'Caña',
+  VIANDA: 'Vianda',
+  OTRO: 'Otro'
+})[categoria]
+
 const form = ref<TipoCultivoRequest>({
   codigo: '',
   nombre: '',
   descripcion: '',
+  categoria: 'OTRO',
   requiereCampo: false,
+  esCosecha: false,
   activo: true,
   orden: undefined
 })
@@ -191,7 +244,7 @@ const loadData = async () => {
       sortBy: 'orden',
       sortType: 'ASC'
     })
-    tiposCultivo.value = response.content
+    tiposCultivo.value = Array.isArray(response?.data) ? response.data : []
   } catch (error) {
     console.error('Error loading tipos de cultivo:', error)
   } finally {
@@ -207,7 +260,9 @@ const openModal = (tipo?: TipoCultivo) => {
       codigo: tipo.codigo,
       nombre: tipo.nombre,
       descripcion: tipo.descripcion || '',
+      categoria: tipo.categoria,
       requiereCampo: tipo.requiereCampo,
+      esCosecha: tipo.esCosecha,
       activo: tipo.activo,
       orden: tipo.orden
     }
@@ -218,7 +273,9 @@ const openModal = (tipo?: TipoCultivo) => {
       codigo: '',
       nombre: '',
       descripcion: '',
+      categoria: 'OTRO' as CategoriaTipoCultivo,
       requiereCampo: false,
+      esCosecha: false,
       activo: true,
       orden: tiposCultivo.value.length + 1
     }
@@ -556,5 +613,328 @@ onMounted(() => {
   margin-top: 0.25rem;
   color: #6c757d;
   font-size: 0.75rem;
+}
+
+/* Refresco visual del nomenclador */
+.tipo-cultivo-list {
+  max-width: 1320px;
+  padding: 2rem;
+  color: #21322a;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.75rem 2rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #dce9df;
+  border-radius: 20px;
+  background: linear-gradient(120deg, #f5fbf4 0%, #fffdf6 100%);
+  box-shadow: 0 10px 30px rgba(30, 74, 43, 0.08);
+}
+
+.page-header h1 {
+  margin: 0.2rem 0 0;
+  color: #163c28;
+  font-size: clamp(1.65rem, 3vw, 2.15rem);
+  letter-spacing: -0.035em;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: #43835a;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  max-width: 680px;
+  margin: 0.6rem 0 0;
+  color: #5d7065;
+  line-height: 1.55;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  background: #fff;
+  border: 1px solid #e3ebe4;
+  border-radius: 14px;
+}
+
+.summary-card strong { display: block; color: #1e412b; font-size: 1.25rem; }
+.summary-card span:not(.summary-icon) { color: #6d7c71; font-size: 0.82rem; }
+.summary-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 11px;
+}
+.icon-green { color: #257143; background: #e5f5e8; }
+.icon-blue { color: #316f9c; background: #e7f2fa; }
+.icon-orange { color: #ad6a22; background: #fff1df; }
+
+.table-container {
+  border: 1px solid #e2eae3;
+  border-radius: 18px;
+  overflow-x: auto;
+  box-shadow: 0 12px 30px rgba(21, 57, 34, 0.07);
+}
+
+.data-table { min-width: 1080px; }
+.data-table th,
+.data-table td { padding: 1rem; border-color: #edf2ed; vertical-align: middle; }
+.data-table th {
+  background: #f7faf7;
+  color: #58705e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+.data-table tbody tr:hover { background: #f7fbf7; }
+.data-table code {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  background: #edf4ee;
+  color: #326042;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.crop-name { color: #213c2b; }
+
+.category-pill,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.category-pill { padding: 0.35rem 0.65rem; }
+.category-canna { color: #8a5318; background: #fff0d9; }
+.category-vianda { color: #275c3b; background: #e0f3e5; }
+.category-otro { color: #5b5e7c; background: #ebecf8; }
+.badge { padding: 0.35rem 0.6rem; border: 1px solid transparent; }
+.badge-success { background: #e4f6e8; color: #23733b; border-color: #c5e9ce; }
+.badge-secondary { background: #f2f4f2; color: #66746a; border-color: #e4e8e4; }
+.badge-active { background: #e3f5e7; color: #23733b; }
+.badge-inactive { background: #fce9e9; color: #aa4141; }
+.badge-active .fa-circle,
+.badge-inactive .fa-circle { font-size: 0.5rem; }
+
+.btn { border-radius: 9px; font-weight: 700; }
+.btn-primary {
+  padding: 0.8rem 1rem;
+  background: #257143;
+  box-shadow: 0 7px 16px rgba(37, 113, 67, 0.22);
+}
+.btn-primary:hover { background: #195b34; transform: translateY(-1px); }
+.icon-button {
+  width: 34px;
+  height: 34px;
+  margin-right: 0.35rem;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.icon-button:hover { transform: translateY(-1px); }
+.btn-edit { color: #3a713e; background: #e6f4e8; }
+.btn-delete { color: #b04444; background: #fbeaea; }
+
+.empty-message { padding: 3rem !important; color: #6b7c70; }
+.empty-message i { display: block; margin-bottom: 0.7rem; color: #77a082; font-size: 1.8rem; }
+.empty-message span { display: block; }
+.empty-action {
+  margin-top: 0.8rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #24713f;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cultivos-panel {
+  padding: 1.35rem;
+  border: 1px solid #e2eae3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(21, 57, 34, 0.07);
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.25rem 1.1rem;
+}
+
+.panel-heading h2 {
+  margin: 0;
+  color: #1e412b;
+  font-size: 1.05rem;
+}
+
+.panel-heading p {
+  margin: 0.3rem 0 0;
+  color: #718076;
+  font-size: 0.82rem;
+}
+
+.result-count {
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  background: #f1f6f1;
+  color: #56715e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cultivos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 1rem;
+}
+
+.cultivo-card {
+  display: flex;
+  min-height: 245px;
+  flex-direction: column;
+  padding: 1.15rem;
+  border: 1px solid #e4ebe5;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #fff 0%, #fbfdfb 100%);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.cultivo-card:hover {
+  transform: translateY(-3px);
+  border-color: #b8d9c0;
+  box-shadow: 0 10px 22px rgba(30, 86, 48, 0.1);
+}
+
+.cultivo-card.inactive { opacity: 0.64; }
+
+.card-topline,
+.card-footer,
+.card-actions,
+.card-meta {
+  display: flex;
+  align-items: center;
+}
+
+.card-topline { justify-content: space-between; gap: 0.75rem; }
+.card-topline code {
+  padding: 0.28rem 0.45rem;
+  border-radius: 6px;
+  background: #edf4ee;
+  color: #326042;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.cultivo-card h3 {
+  margin: 1rem 0 0.35rem;
+  color: #1e3d29;
+  font-size: 1.1rem;
+  letter-spacing: -0.015em;
+}
+
+.card-description {
+  min-height: 2.8rem;
+  margin: 0;
+  color: #6b7c70;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.feature-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 1rem 0;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #79857d;
+  font-size: 0.76rem;
+}
+
+.feature i { width: 14px; color: #9aa59e; }
+.feature.enabled { color: #28663c; font-weight: 700; }
+.feature.enabled i { color: #2d8a4d; }
+.feature.harvest.enabled { color: #9a5f1d; }
+.feature.harvest.enabled i { color: #c37b28; }
+
+.card-footer {
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding-top: 0.85rem;
+  margin-top: auto;
+  border-top: 1px solid #edf1ed;
+}
+
+.card-meta { gap: 0.65rem; color: #77847a; font-size: 0.72rem; }
+.status-dot { display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 700; color: #a04b4b; }
+.status-dot::before { width: 7px; height: 7px; border-radius: 50%; background: #d46a6a; content: ''; }
+.status-dot.active { color: #297342; }
+.status-dot.active::before { background: #42a05d; }
+.card-actions { gap: 0.25rem; }
+.card-actions .icon-button { margin-right: 0; }
+
+.modal-overlay { padding: 1rem; background: rgba(17, 36, 24, 0.46); backdrop-filter: blur(3px); }
+.modal { border-radius: 16px; }
+.modal-header { padding: 1.25rem 1.5rem; border-color: #ebf0eb; background: #fbfdfb; }
+.modal-header h2 { color: #1e402b; }
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group select {
+  padding: 0.65rem 0.7rem;
+  border-color: #d9e4da;
+  border-radius: 8px;
+  background: #fff;
+}
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  border-color: #54a16c;
+  box-shadow: 0 0 0 3px rgba(84, 161, 108, 0.15);
+}
+
+@media (max-width: 720px) {
+  .tipo-cultivo-list { padding: 1rem; }
+  .page-header { align-items: flex-start; flex-direction: column; padding: 1.35rem; }
+  .page-header .btn { width: 100%; justify-content: center; }
+  .summary-grid { grid-template-columns: 1fr; gap: 0.65rem; }
+  .form-row { flex-direction: column; gap: 0; }
+  .cultivos-panel { padding: 1rem; }
+  .panel-heading { align-items: flex-start; flex-direction: column; }
+  .cultivos-grid { grid-template-columns: 1fr; }
 }
 </style>

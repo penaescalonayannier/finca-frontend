@@ -505,6 +505,27 @@
               </span>
             </div>
 
+            <div v-if="salidaForm.destino === 'INSUMO'" class="form-group actividad-agricola-group">
+              <label>Actividad agrícola <small>(opcional)</small></label>
+              <select v-model="salidaForm.laborId" class="form-control">
+                <option value="">Sin asociar a una actividad</option>
+                <option v-for="labor in laboresAgricolas" :key="labor.id" :value="labor.id">
+                  {{ labor.codigo }} · {{ labor.nombre }}
+                </option>
+              </select>
+              <small>Registra en qué actividad se utilizará este insumo.</small>
+            </div>
+            <div v-if="salidaForm.destino === 'INSUMO' && salidaForm.laborId" class="form-group actividad-agricola-group">
+              <label>Cantidad de actividad realizada *</label>
+              <input v-model.number="salidaForm.cantidadActividad" type="number" min="0.0001" step="0.0001" class="form-control" :placeholder="laborSeleccionada(salidaForm.laborId)?.nivelActividad || 'Cantidad realizada'" />
+              <small>
+                Nivel: {{ laborSeleccionada(salidaForm.laborId)?.nivelActividad || 'sin definir' }} ·
+                Índice real: <strong>{{ indiceReal(cantidadTotalSalida, salidaForm.cantidadActividad) }}</strong>
+                <span v-if="laborSeleccionada(salidaForm.laborId)?.indiceConsumo !== undefined"> / permisible: {{ laborSeleccionada(salidaForm.laborId)?.indiceConsumo }}</span>
+                <strong v-if="superaIndicePermisible(cantidadTotalSalida, salidaForm.cantidadActividad, salidaForm.laborId)" class="error-text"> · Excede el permisible</strong>
+              </small>
+            </div>
+
             <!-- Items -->
             <div class="items-section">
               <div class="items-header">
@@ -688,6 +709,25 @@
                   </template>
                 </span>
               </label>
+              <div v-if="salidaMultipleForm.destino === 'INSUMO' && linea.seleccionada" class="actividad-agricola-linea">
+                <label>Actividad agrícola <small>(opcional)</small></label>
+                <select v-model="linea.laborId" class="form-control">
+                  <option value="">Sin asociar a una actividad</option>
+                  <option v-for="labor in laboresAgricolas" :key="labor.id" :value="labor.id">
+                    {{ labor.codigo }} · {{ labor.nombre }}
+                  </option>
+                </select>
+                <template v-if="linea.laborId">
+                  <label>Cantidad de actividad realizada *</label>
+                  <input v-model.number="linea.cantidadActividad" type="number" min="0.0001" step="0.0001" class="form-control" :placeholder="laborSeleccionada(linea.laborId)?.nivelActividad || 'Cantidad realizada'" />
+                  <small>
+                    Nivel: {{ laborSeleccionada(linea.laborId)?.nivelActividad || 'sin definir' }} ·
+                    Índice real: <strong>{{ indiceReal(linea.cantidad, linea.cantidadActividad) }}</strong>
+                    <span v-if="laborSeleccionada(linea.laborId)?.indiceConsumo !== undefined"> / permisible: {{ laborSeleccionada(linea.laborId)?.indiceConsumo }}</span>
+                    <strong v-if="superaIndicePermisible(linea.cantidad, linea.cantidadActividad, linea.laborId)" class="error-text"> · Excede el permisible</strong>
+                  </small>
+                </template>
+              </div>
               <div v-if="salidaMultipleForm.destino === 'TRABAJADORES' && linea.seleccionada" class="compradores-producto">
                 <div class="compradores-header">
                   <strong>Compradores de {{ linea.productoName }}</strong>
@@ -798,6 +838,7 @@ import FincaProductoService from '@/services/FincaProductoService'
 import SalidaService from '@/services/SalidaService'
 import TrabajadorService from '@/services/TrabajadorService'
 import MovimientoStockService from '@/services/MovimientoStockService'
+import LaborAgricolaService from '@/services/LaborAgricolaService'
 import { AsientoContableService } from '@/services/ContabilidadService'
 import { notify } from '@/composables/useNotification'
 import { confirmDialog } from '@/composables/useConfirmDialog'
@@ -806,6 +847,7 @@ import type { FincaProducto } from '@/types/FincaProducto'
 import type { DestinoSalida, ItemSalida, CreateSalidaRequest } from '@/types/Salida'
 import type { AsientoContable } from '@/types/Contabilidad'
 import { DESTINO_TIPO_MAP } from '@/types/Salida'
+import type { LaborAgricola } from '@/types/LaborAgricola'
 
 interface Trabajador {
   id: string
@@ -855,6 +897,7 @@ const cargandoDestinos = ref(false)
 
 // Estado para salida completa (facturas/vales)
 const trabajadores = ref<Trabajador[]>([])
+const laboresAgricolas = ref<LaborAgricola[]>([])
 const salidaStep = ref(1)
 
 // Estado para asientos contables
@@ -950,6 +993,8 @@ const esEntradaValida = computed(() => {
 const salidaForm = reactive({
   destino: 'TRABAJADORES' as DestinoSalida,
   observaciones: '',
+  laborId: '',
+  cantidadActividad: undefined as number | undefined,
   items: [{ trabajadorId: '', cantidad: 1, pagado: false }] as ItemSalida[]
 })
 
@@ -960,6 +1005,8 @@ interface LineaSalidaMultipleForm {
   stock: number
   seleccionada: boolean
   cantidad: number
+  laborId: string
+  cantidadActividad?: number
   items: ItemSalida[]
 }
 
@@ -976,11 +1023,22 @@ const cantidadTotalSalida = computed(() => {
   return salidaForm.items.reduce((sum, item) => sum + (item.cantidad || 0), 0)
 })
 
+const laborSeleccionada = (id?: string) => laboresAgricolas.value.find(labor => labor.id === id)
+const indiceReal = (combustible: number, cantidadActividad?: number) =>
+  cantidadActividad && cantidadActividad > 0 ? (combustible / cantidadActividad).toFixed(4) : '—'
+const superaIndicePermisible = (combustible: number, cantidadActividad: number | undefined, laborId?: string) => {
+  const permisible = laborSeleccionada(laborId)?.indiceConsumo
+  return permisible !== undefined && permisible > 0 && !!cantidadActividad && cantidadActividad > 0 && combustible / cantidadActividad > permisible
+}
+
 const itemsSalidaValidos = computed(() => {
   if (salidaForm.items.length === 0) return false
 
   if (salidaForm.destino !== 'TRABAJADORES') {
-    return salidaForm.items.every(item => Number.isFinite(item.cantidad) && item.cantidad > 0)
+    const cantidadesValidas = salidaForm.items.every(item => Number.isFinite(item.cantidad) && item.cantidad > 0)
+    const actividadValida = salidaForm.destino !== 'INSUMO' || !salidaForm.laborId ||
+      (Number.isFinite(salidaForm.cantidadActividad) && (salidaForm.cantidadActividad || 0) > 0)
+    return cantidadesValidas && actividadValida
   }
 
   const trabajadoresSeleccionados = new Set<string>()
@@ -1037,7 +1095,9 @@ const esSalidaMultipleValida = computed(() =>
   lineasSalidaMultipleSeleccionadas.value.every(linea =>
     salidaMultipleForm.destino === 'TRABAJADORES'
       ? lineaValidaParaTrabajadores(linea)
-      : Number.isFinite(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock
+      : Number.isFinite(linea.cantidad) && linea.cantidad > 0 && linea.cantidad <= linea.stock &&
+        (salidaMultipleForm.destino !== 'INSUMO' || !linea.laborId ||
+          (Number.isFinite(linea.cantidadActividad) && (linea.cantidadActividad || 0) > 0))
   )
 )
 
@@ -1417,14 +1477,25 @@ const cargarTrabajadores = async () => {
   }
 }
 
+const cargarLaboresAgricolas = async () => {
+  try {
+    laboresAgricolas.value = (await LaborAgricolaService.listar()).filter(labor => labor.activo)
+  } catch (error) {
+    console.error('Error cargando actividades agrícolas:', error)
+    notify.error('Error', 'No se pudieron cargar las actividades agrícolas')
+  }
+}
+
 const abrirModalSalida = async (producto: AlmacenFincaProducto) => {
   productoOperacion.value = producto
   salidaStep.value = 1 // Reset wizard to step 1
   salidaForm.destino = 'TRABAJADORES'
   salidaForm.observaciones = ''
+  salidaForm.laborId = ''
+  salidaForm.cantidadActividad = undefined
   salidaForm.items = [{ trabajadorId: '', cantidad: 1, pagado: false }]
   mostrarModalSalida.value = true
-  await cargarTrabajadores()
+  await Promise.all([cargarTrabajadores(), cargarLaboresAgricolas()])
 }
 
 const cerrarModalSalida = () => {
@@ -1445,10 +1516,12 @@ const abrirModalSalidaMultiple = async () => {
       stock: producto.stock,
       seleccionada: false,
       cantidad: 1,
+      laborId: '',
+      cantidadActividad: undefined,
       items: []
     }))
   mostrarModalSalidaMultiple.value = true
-  await cargarTrabajadores()
+  await Promise.all([cargarTrabajadores(), cargarLaboresAgricolas()])
 }
 
 const cerrarModalSalidaMultiple = () => {
@@ -1483,13 +1556,11 @@ const ejecutarSalidaMultiple = async () => {
       observaciones: salidaMultipleForm.observaciones,
       lineas: lineasSalidaMultipleSeleccionadas.value.map(linea => ({
         almacenFincaProductoId: linea.almacenFincaProductoId,
+        laborId: salidaMultipleForm.destino === 'INSUMO' ? linea.laborId || undefined : undefined,
+        cantidadActividad: salidaMultipleForm.destino === 'INSUMO' ? linea.cantidadActividad : undefined,
         cantidad: cantidadLineaSalidaMultiple(linea),
         items: salidaMultipleForm.destino === 'TRABAJADORES'
-          ? linea.items.map(item => ({
-              trabajadorId: item.trabajadorId,
-              cantidad: item.cantidad,
-              pagado: Boolean(item.pagado)
-            }))
+          ? linea.items.map(item => ({ trabajadorId: item.trabajadorId, cantidad: item.cantidad, pagado: Boolean(item.pagado) }))
           : undefined
       }))
     })
@@ -1497,9 +1568,7 @@ const ejecutarSalidaMultiple = async () => {
     notify.success('Salida múltiple registrada', `Se generó un solo vale con ${cantidadLineas} producto(s).`)
     cerrarModalSalidaMultiple()
     await cargarAlmacen()
-    if (mostrarAsientos.value) {
-      await cargarAsientosContables()
-    }
+    if (mostrarAsientos.value) await cargarAsientosContables()
     emit('updated')
   } catch (error: unknown) {
     console.error('Error al registrar salida múltiple:', error)
@@ -1525,6 +1594,10 @@ watch(() => salidaForm.destino, (newDestino) => {
       item.trabajadorId = ''
     })
   }
+  if (newDestino !== 'INSUMO') {
+    salidaForm.laborId = ''
+    salidaForm.cantidadActividad = undefined
+  }
 })
 
 watch(() => salidaMultipleForm.destino, async (newDestino) => {
@@ -1539,6 +1612,10 @@ watch(() => salidaMultipleForm.destino, async (newDestino) => {
   }
   salidaMultipleForm.lineas.forEach(linea => {
     linea.items = []
+    if (newDestino !== 'INSUMO') {
+      linea.laborId = ''
+      linea.cantidadActividad = undefined
+    }
   })
 })
 
@@ -1558,6 +1635,8 @@ const ejecutarSalida = async () => {
       observaciones: salidaForm.observaciones,
       items: salidaForm.items.map(item => ({
         trabajadorId: item.trabajadorId || '',
+        laborId: salidaForm.destino === 'INSUMO' ? salidaForm.laborId || undefined : undefined,
+        cantidadActividad: salidaForm.destino === 'INSUMO' ? salidaForm.cantidadActividad : undefined,
         cantidad: item.cantidad,
         pagado: item.pagado
       }))

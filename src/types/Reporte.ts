@@ -10,6 +10,11 @@ export interface Reporte {
   tipoCultivoRequiereCampo?: boolean
   tipoAnimalId?: string
   tipoAnimalNombre?: string
+  productoId?: string
+  cantidadCosechada?: number
+  unidadMedidaSnapshot?: string
+  precioUnitarioReferencia?: number
+  tipoPrecioReferencia?: string
   bloque: string
   campo: string
   area: string
@@ -26,6 +31,11 @@ export interface ReporteRequest {
   tipoReporteId?: string
   tipoCultivoId?: string
   tipoAnimalId?: string
+  productoId?: string
+  cantidadCosechada?: number
+  unidadMedidaSnapshot?: string
+  precioUnitarioReferencia?: number
+  tipoPrecioReferencia?: string
   bloque: string
   campo: string
   area: string
@@ -47,6 +57,11 @@ export interface ReporteResponse {
   tipoCultivoRequiereCampo?: boolean
   tipoAnimalId?: string
   tipoAnimalNombre?: string
+  productoId?: string
+  cantidadCosechada?: number
+  unidadMedidaSnapshot?: string
+  precioUnitarioReferencia?: number
+  tipoPrecioReferencia?: string
   bloque: string
   campo: string
   area: string

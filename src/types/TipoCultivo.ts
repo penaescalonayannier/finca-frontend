@@ -7,6 +7,7 @@ export interface TipoCultivo {
   descripcion?: string
   categoria: CategoriaTipoCultivo
   requiereCampo: boolean
+  esCosecha: boolean
   activo: boolean
   orden?: number
 }
@@ -17,6 +18,7 @@ export interface TipoCultivoRequest {
   descripcion?: string
   categoria: CategoriaTipoCultivo
   requiereCampo: boolean
+  esCosecha: boolean
   activo?: boolean
   orden?: number
 }

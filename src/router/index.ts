@@ -60,6 +60,7 @@ import CajaOficialView from '@/views/CajaOficialView.vue'
 import DocumentosCajaView from '@/views/DocumentosCajaView.vue'
 import BancoView from '@/views/BancoView.vue'
 import ConsecutivosDocumentalesView from '@/views/ConsecutivosDocumentalesView.vue'
+import PlanIngresoVentaView from '@/views/PlanIngresoVentaView.vue'
 import ConteosFisicosAlmacenView from '@/views/ConteosFisicosAlmacenView.vue'
 import ListaTipoReportes from '@/components/ListaTipoReportes.vue'
 import CrearTipoReporte from '@/components/CrearTipoReporte.vue'
@@ -71,6 +72,8 @@ import CentroCostoList from '@/components/CentroCostoList.vue'
 import CrearCentroCosto from '@/components/CrearCentroCosto.vue'
 import EditarCentroCosto from '@/components/EditarCentroCosto.vue'
 import ExpedientesDisciplinariosView from '@/views/ExpedientesDisciplinariosView.vue'
+import LaborAgricolaView from '@/views/LaborAgricolaView.vue'
+import ControlCombustibleView from '@/views/ControlCombustibleView.vue'
 
 // Contabilidad views
 import LibroDiario from '@/views/contabilidad/LibroDiario.vue'
@@ -282,6 +285,11 @@ const routes: RouteRecordRaw[] = [
     component: AlmacenList
   },
   {
+    path: '/control-combustible',
+    name: 'ControlCombustible',
+    component: ControlCombustibleView
+  },
+  {
     path: '/almacenes/:id',
     name: 'DetalleAlmacen',
     component: DetalleAlmacenView
@@ -404,6 +412,16 @@ const routes: RouteRecordRaw[] = [
     path: '/consecutivos-documentales',
     name: 'ConsecutivosDocumentales',
     component: ConsecutivosDocumentalesView
+  },
+  {
+    path: '/plan-ingreso-venta',
+    name: 'PlanIngresoVenta',
+    component: PlanIngresoVentaView
+  },
+  {
+    path: '/labores-agricolas',
+    name: 'LaboresAgricolas',
+    component: LaborAgricolaView
   },
   // Tipos de Reporte (nomenclador)
   {

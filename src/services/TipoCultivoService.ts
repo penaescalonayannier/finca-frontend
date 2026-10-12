@@ -26,10 +26,10 @@ export default {
     sortType?: 'ASC' | 'DESC'
     filter?: Array<{ key: string; operator: string; value: string }>
   }): Promise<{
-    content: TipoCultivo[]
+    data: TipoCultivo[]
     totalElements: number
     totalPages: number
-    number: number
+    page: number
     size: number
   }> {
     const response = await axios.post(`${API_URL}/search`, {

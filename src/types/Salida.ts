@@ -32,6 +32,13 @@ export interface ItemSalida {
   unidadMedida?: string
   trabajadorId?: string // Optional for COMEDOR salidas
   trabajadorNombre?: string
+  /** Actividad agrícola opcional para consumos con destino INSUMO. */
+  laborId?: string
+  laborCode?: string
+  laborName?: string
+  cantidadActividad?: number
+  indiceConsumoCalculado?: number
+  indiceConsumoPermisible?: number
   cantidad: number
   precio?: number
   pagado?: boolean

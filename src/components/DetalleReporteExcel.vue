@@ -65,6 +65,11 @@
         </div>
       </div>
 
+      <div v-if="reporte?.cantidadCosechada && reporte?.precioUnitarioReferencia" class="aviso-cosecha">
+        <span>🌾</span><div><strong>Reporte de cosecha</strong><p>Respaldo: {{ reporte.cantidadCosechada }} {{ reporte.unidadMedidaSnapshot }} × ${{ reporte.precioUnitarioReferencia.toFixed(2) }} = <b>${{ (reporte.cantidadCosechada * reporte.precioUnitarioReferencia).toFixed(2) }}</b></p></div>
+        <div><p>Gasto salarial: <b>${{ gastoSalarial.toFixed(2) }}</b></p><p>Diferencia: <b>${{ (ingresoPlanificado - gastoSalarial).toFixed(2) }}</b></p></div>
+      </div>
+
       <!-- Instrucciones -->
       <div class="instrucciones">
         Click en celda para editar horas | Enter o click fuera para guardar | Esc para cancelar
@@ -482,9 +487,11 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import ReporteService from '@/services/ReporteService'
 import DiaTrabajoService from '@/services/DiaTrabajoService'
 import TrabajadorService from '@/services/TrabajadorService'
+import CargoService from '@/services/CargoService'
 import type { Reporte } from '@/types/Reporte'
 import type { DiaTrabajo, TrabajadorDia } from '@/types/DiaTrabajo'
 import type { Trabajador } from '@/types/Trabajador'
+import type { CargoEntity } from '@/types/Cargo'
 
 interface TrabajadorResumen {
   id: string
@@ -520,6 +527,7 @@ const diasParaTrabajador = ref<string[]>([])
 const trabajadoresSeleccionados = ref<string[]>([])
 const buscarTrabajadorTexto = ref('')
 const trabajadoresList = ref<Trabajador[]>([])
+const cargos = ref<CargoEntity[]>([])
 const trabajadoresFiltrados = ref<Trabajador[]>([])
 const guardandoTrabajador = ref(false)
 
@@ -622,6 +630,12 @@ const totalHorasReporte = computed(() => {
   })
   return total.toFixed(1)
 })
+const gastoSalarial = computed(() => dias.value.reduce((total, dia) => total + (dia.trabajadores || []).reduce((subtotal, t) => {
+  const trabajador = trabajadoresList.value.find(item => item.id === t.trabajadorId)
+  const salario = cargos.value.find(cargo => cargo.id === trabajador?.cargoId)?.salarioEscala || 0
+  return subtotal + (salario / 24 / 8) * (Number(t.horas) || 0)
+}, 0), 0))
+const ingresoPlanificado = computed(() => (reporte.value?.cantidadCosechada || 0) * (reporte.value?.precioUnitarioReferencia || 0))
 
 // Verificar si hay sábados. Las filas de trabajadores faltantes se crean al aplicar.
 const tieneSabados = computed(() => {
@@ -1310,6 +1324,8 @@ const cargarTrabajadoresList = async () => {
   try {
     const response = await TrabajadorService.buscarTrabajadores({ size: 999 })
     trabajadoresList.value = response.data.data || []
+    const cargosResponse = await CargoService.getAll()
+    cargos.value = cargosResponse.data.data || []
     filtrarTrabajadores()
   } catch (e) {
     console.error('Error cargando trabajadores:', e)

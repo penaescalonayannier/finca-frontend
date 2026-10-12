@@ -643,7 +643,9 @@ h2 {
   border-radius: 16px;
   position: relative;
   width: 90%;
-  max-width: 600px;
+  max-width: 980px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   animation: slideUp 0.3s ease;
 }
 

@@ -52,6 +52,14 @@
           🔍 No Reportados
         </button>
         <button
+          @click="verReportesCosecha"
+          class="btn-cosecha"
+          :disabled="isLoading"
+          title="Ver el ingreso planificado y el gasto salarial de los reportes de cosecha"
+        >
+          🌾 Cosechas
+        </button>
+        <button
           @click="verTrabajadoresMenor8Horas"
           class="btn-menor8"
           :disabled="isLoading || !reporteData"
@@ -250,6 +258,64 @@
     </div>
 
     <!-- Modal Trabajadores Excedidos -->
+    <div v-if="mostrarModalCosechas" class="modal-overlay">
+      <div class="modal-cosechas">
+        <div class="modal-header cosecha-header">
+          <div>
+            <h3>🌾 Reportes de cosecha</h3>
+            <p>{{ mesSeleccionado }} {{ yearSeleccionado }} · Ingreso planificado vs. gasto salarial</p>
+          </div>
+          <button @click="cerrarModalCosechas" class="btn-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div v-if="isLoadingCosechas" class="loading-modal">
+            <div class="spinner-small"></div>
+            <p>Calculando importes de los reportes de cosecha...</p>
+          </div>
+          <template v-else>
+            <div v-if="reportesCosecha.length" class="cosecha-resumen">
+              <span><b>{{ reportesCosecha.length }}</b> reporte(s)</span>
+              <span>Ingreso: <b>{{ moneda(totalesCosecha.ingreso) }}</b></span>
+              <span>Gasto: <b>{{ moneda(totalesCosecha.gasto) }}</b></span>
+              <span :class="{ negativo: totalesCosecha.diferencia < 0 }">Diferencia: <b>{{ moneda(totalesCosecha.diferencia) }}</b></span>
+            </div>
+            <div v-if="reportesCosecha.length" class="tabla-cosechas-wrap">
+              <table class="tabla-cosechas">
+                <thead>
+                  <tr>
+                    <th>Código</th><th>Fecha</th><th>Cultivo</th><th>Producción</th>
+                    <th>Ingreso plan</th><th>Gasto salarial</th><th>Diferencia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="reporte in reportesCosecha" :key="reporte.id" @click="abrirDetalleExcel(reporte)" title="Abrir detalle del reporte">
+                    <td><b>{{ reporte.codigo }}</b></td>
+                    <td>{{ reporte.fecha || '-' }}</td>
+                    <td>{{ reporte.tipoCultivoNombre || '-' }}</td>
+                    <td>{{ numero(reporte.cantidadCosechada) }} {{ reporte.unidadMedidaSnapshot || '' }}</td>
+                    <td>{{ moneda(reporte.ingresoPlanificado) }}</td>
+                    <td>{{ moneda(reporte.gastoSalarial) }}</td>
+                    <td :class="{ negativo: reporte.diferencia < 0, positivo: reporte.diferencia >= 0 }">{{ moneda(reporte.diferencia) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-else class="no-reportes">
+              <span class="empty-icon">🌾</span>
+              <p>No hay reportes de cosecha en el período seleccionado.</p>
+            </div>
+          </template>
+        </div>
+        <div class="modal-footer">
+          <button @click="descargarPdfCosechas" class="btn-descargar-cosechas" :disabled="isLoadingCosechas || !reportesCosecha.length">
+            📄 Descargar PDF
+          </button>
+          <button @click="cerrarModalCosechas" class="btn-cerrar">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="mostrarModalExcedidos" class="modal-overlay">
       <div class="modal-excedidos">
         <div class="modal-header">
@@ -714,10 +780,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { confirmDialog } from '@/composables/useConfirmDialog'
 import ReporteConsolidadoService from '@/services/ReporteConsolidadoService'
 import TrabajadoresExcedidosService from '@/services/TrabajadoresExcedidosService'
+import ReporteService from '@/services/ReporteService'
+import DiaTrabajoService from '@/services/DiaTrabajoService'
+import TrabajadorService from '@/services/TrabajadorService'
+import CargoService from '@/services/CargoService'
 import DetalleReporteExcel from './DetalleReporteExcel.vue'
+import type { Reporte } from '@/types/Reporte'
+import type { Trabajador } from '@/types/Trabajador'
+import type { CargoEntity } from '@/types/Cargo'
 import type { ReporteConsolidado } from '@/types/ReporteConsolidado'
 import type { TrabajadorExcedido } from '@/services/TrabajadoresExcedidosService'
 
@@ -735,6 +810,18 @@ const trabajadoresExcedidos = ref<TrabajadorExcedido[]>([])
 const mostrarModalFaltantes = ref(false)
 const isLoadingFaltantes = ref(false)
 const trabajadoresFaltantes = ref<any[]>([])
+
+interface ReporteCosecha extends Reporte {
+  ingresoPlanificado: number
+  gastoSalarial: number
+  diferencia: number
+  trabajadores: Array<{ nombre: string, horas: number, salarioDevengado: number }>
+}
+
+// Modal de reportes de cosecha del período
+const mostrarModalCosechas = ref(false)
+const isLoadingCosechas = ref(false)
+const reportesCosecha = ref<ReporteCosecha[]>([])
 
 // Modal de trabajadores con menos de 8 horas
 const mostrarModalMenor8 = ref(false)
@@ -805,6 +892,25 @@ const fechaActual = computed(() => {
     minute: '2-digit'
   })
 })
+
+const totalesCosecha = computed(() => reportesCosecha.value.reduce(
+  (total, reporte) => ({
+    ingreso: total.ingreso + reporte.ingresoPlanificado,
+    gasto: total.gasto + reporte.gastoSalarial,
+    diferencia: total.diferencia + reporte.diferencia
+  }),
+  { ingreso: 0, gasto: 0, diferencia: 0 }
+))
+
+const numero = (valor?: number) => Number(valor || 0).toLocaleString('es-ES', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
+})
+
+const moneda = (valor: number) => `$${Number(valor || 0).toLocaleString('es-ES', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+})}`
 
 // Obtener inicial del día de la semana
 const getDiaSemanaBrev = (dia: number): string => {
@@ -942,6 +1048,141 @@ const verTrabajadoresFaltantes = async () => {
 const cerrarModalFaltantes = () => {
   mostrarModalFaltantes.value = false
   trabajadoresFaltantes.value = []
+}
+
+const verReportesCosecha = async () => {
+  if (!yearSeleccionado.value || !mesSeleccionado.value) {
+    alert('Seleccione un año y un mes para consultar')
+    return
+  }
+
+  mostrarModalCosechas.value = true
+  isLoadingCosechas.value = true
+  reportesCosecha.value = []
+
+  try {
+    const [reportesResponse, trabajadoresResponse, cargosResponse] = await Promise.all([
+      ReporteService.buscarReportes({
+        size: 1000,
+        sortBy: 'fecha',
+        sortType: 'DES',
+        filter: [
+          { key: 'year', operator: 'EQUALS', value: yearSeleccionado.value, logicalOperation: 'AND' },
+          { key: 'mes', operator: 'EQUALS', value: mesSeleccionado.value, logicalOperation: 'AND' }
+        ]
+      }),
+      TrabajadorService.buscarTrabajadores({ size: 999 }),
+      CargoService.getAll()
+    ])
+    const trabajadores: Trabajador[] = trabajadoresResponse.data.data || []
+    const cargos: CargoEntity[] = cargosResponse.data.data || []
+    const trabajadorPorId = new Map(trabajadores.map(trabajador => [trabajador.id, trabajador]))
+    const salarioPorTrabajador = new Map(trabajadores.map(trabajador => {
+      const salario = cargos.find(cargo => cargo.id === trabajador.cargoId)?.salarioEscala || 0
+      return [trabajador.id, Number(salario)]
+    }))
+    // PaginatedResponse del backend expone la lista como `data`, no como `content`.
+    const respuestaReportes = reportesResponse.data as unknown as { data?: Reporte[], content?: Reporte[] }
+    const reportes = (respuestaReportes.data || respuestaReportes.content || []).filter((reporte: Reporte) =>
+      reporte.cantidadCosechada != null &&
+      reporte.precioUnitarioReferencia != null
+    )
+
+    reportesCosecha.value = await Promise.all(reportes.map(async (reporte: Reporte) => {
+      const diasResponse = await DiaTrabajoService.obtenerDiasPorReporte(reporte.id!)
+      const trabajadoresCosecha = new Map<string, { nombre: string, horas: number, salarioDevengado: number }>()
+      const diasReporte = diasResponse.data.items || []
+      diasReporte.forEach(dia => {
+        const trabajadoresDia = dia.trabajadores || []
+        trabajadoresDia.forEach(trabajador => {
+          const horas = Number(trabajador.horas) || 0
+          const salarioDevengado = ((salarioPorTrabajador.get(trabajador.trabajadorId) || 0) / 24 / 8) * horas
+          const acumulado = trabajadoresCosecha.get(trabajador.trabajadorId) || {
+            nombre: trabajador.trabajadorNombre || trabajadorPorId.get(trabajador.trabajadorId)?.nombre || 'Sin nombre',
+            horas: 0,
+            salarioDevengado: 0
+          }
+          acumulado.horas += horas
+          acumulado.salarioDevengado += salarioDevengado
+          trabajadoresCosecha.set(trabajador.trabajadorId, acumulado)
+        })
+      })
+      const trabajadoresDetalle = Array.from(trabajadoresCosecha.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+      const gastoSalarial = trabajadoresDetalle.reduce((total, trabajador) => total + trabajador.salarioDevengado, 0)
+      const ingresoPlanificado = Number(reporte.cantidadCosechada) * Number(reporte.precioUnitarioReferencia)
+      return { ...reporte, ingresoPlanificado, gastoSalarial, diferencia: ingresoPlanificado - gastoSalarial, trabajadores: trabajadoresDetalle }
+    }))
+  } catch (error) {
+    console.error('Error al obtener reportes de cosecha:', error)
+    alert('No fue posible consultar los reportes de cosecha.')
+    mostrarModalCosechas.value = false
+  } finally {
+    isLoadingCosechas.value = false
+  }
+}
+
+const cerrarModalCosechas = () => {
+  mostrarModalCosechas.value = false
+  reportesCosecha.value = []
+}
+
+const descargarPdfCosechas = () => {
+  if (!reportesCosecha.value.length) return
+
+  const documento = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  documento.setFontSize(16)
+  documento.setTextColor(27, 94, 32)
+  documento.text('CONSOLIDADO DE REPORTES DE COSECHA', 14, 16)
+  documento.setFontSize(10)
+  documento.setTextColor(70, 70, 70)
+  documento.text(`Período: ${mesSeleccionado.value} ${yearSeleccionado.value}`, 14, 23)
+  documento.text(`Reportes: ${reportesCosecha.value.length}     Ingreso planificado: ${moneda(totalesCosecha.value.ingreso)}     Gasto salarial: ${moneda(totalesCosecha.value.gasto)}     Diferencia: ${moneda(totalesCosecha.value.diferencia)}`, 14, 30)
+
+  autoTable(documento, {
+    startY: 36,
+    head: [['Código', 'Fecha', 'Cultivo', 'Producción', 'Ingreso planificado', 'Gasto salarial', 'Diferencia']],
+    body: reportesCosecha.value.map(reporte => [
+      reporte.codigo,
+      reporte.fecha || '-',
+      reporte.tipoCultivoNombre || '-',
+      `${numero(reporte.cantidadCosechada)} ${reporte.unidadMedidaSnapshot || ''}`,
+      moneda(reporte.ingresoPlanificado),
+      moneda(reporte.gastoSalarial),
+      moneda(reporte.diferencia)
+    ]),
+    theme: 'grid',
+    headStyles: { fillColor: [46, 125, 50] },
+    styles: { fontSize: 8, cellPadding: 2.5 },
+    columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
+  })
+
+  reportesCosecha.value.forEach(reporte => {
+    documento.addPage()
+    documento.setFontSize(14)
+    documento.setTextColor(27, 94, 32)
+    documento.text(`Reporte ${reporte.codigo} · ${reporte.fecha || '-'}`, 14, 16)
+    documento.setFontSize(10)
+    documento.setTextColor(70, 70, 70)
+    documento.text(`Cultivo: ${reporte.tipoCultivoNombre || '-'}    Producción: ${numero(reporte.cantidadCosechada)} ${reporte.unidadMedidaSnapshot || ''}`, 14, 23)
+    documento.text(`Ingreso planificado: ${moneda(reporte.ingresoPlanificado)}    Gasto salarial: ${moneda(reporte.gastoSalarial)}    Diferencia: ${moneda(reporte.diferencia)}`, 14, 30)
+    autoTable(documento, {
+      startY: 36,
+      head: [['#', 'Trabajador participante', 'Horas trabajadas', 'Salario devengado']],
+      body: reporte.trabajadores.map((trabajador, indice) => [
+        indice + 1,
+        trabajador.nombre,
+        numero(trabajador.horas),
+        moneda(trabajador.salarioDevengado)
+      ]),
+      foot: [['', 'Total', numero(reporte.trabajadores.reduce((total, trabajador) => total + trabajador.horas, 0)), moneda(reporte.gastoSalarial)]],
+      theme: 'grid',
+      headStyles: { fillColor: [46, 125, 50] },
+      footStyles: { fillColor: [77, 124, 47] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: { 0: { halign: 'center', cellWidth: 14 }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+    })
+  })
+  documento.save(`consolidado_cosechas_${yearSeleccionado.value}_${mesSeleccionado.value}.pdf`)
 }
 
 // Trabajadores con menos de 8 horas (solo días de lunes a viernes)
@@ -1475,6 +1716,31 @@ h2::before {
 
 .btn-faltantes:disabled {
   background: linear-gradient(180deg, #bdc3c7 0%, #a0a6a9 100%);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-cosecha {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #2e7d32, #5b9b37);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: .9em;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(46, 125, 50, .3);
+  transition: all .2s ease;
+}
+
+.btn-cosecha:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1b5e20, #477c2c);
+  transform: translateY(-2px);
+}
+
+.btn-cosecha:disabled {
+  background: #aab5aa;
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -3289,6 +3555,34 @@ h2::before {
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
   border: 1px solid #e0e0e0;
 }
+
+.modal-cosechas {
+  width: min(1180px, 96vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, .28);
+}
+
+.modal-cosechas .modal-body { overflow: auto; }
+.btn-descargar-cosechas { background: #2e7d32; color: #fff; border: none; border-radius: 6px; padding: 9px 15px; cursor: pointer; font-weight: 700; margin-right: 10px; }
+.btn-descargar-cosechas:hover:not(:disabled) { background: #1b5e20; }
+.btn-descargar-cosechas:disabled { background: #a8b6a8; cursor: not-allowed; }
+.cosecha-header { background: linear-gradient(135deg, #1b5e20, #4b7d2a); color: #fff; }
+.cosecha-header h3 { margin: 0; }
+.cosecha-header p { margin: 4px 0 0; font-size: .88rem; opacity: .9; }
+.cosecha-resumen { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 14px; margin-bottom: 14px; border-radius: 8px; background: #f1f8e9; color: #355b24; }
+.tabla-cosechas-wrap { overflow-x: auto; }
+.tabla-cosechas { width: 100%; border-collapse: collapse; min-width: 850px; }
+.tabla-cosechas th { padding: 11px; background: #edf5e8; color: #285b2b; text-align: left; white-space: nowrap; }
+.tabla-cosechas td { padding: 11px; border-bottom: 1px solid #e5ebe3; white-space: nowrap; }
+.tabla-cosechas tbody tr { cursor: pointer; transition: background .15s ease; }
+.tabla-cosechas tbody tr:hover { background: #f7fbf4; }
+.positivo { color: #1d7a37; font-weight: 600; }
+.negativo { color: #c62828; font-weight: 700; }
 
 .trabajador-info-header {
   background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);

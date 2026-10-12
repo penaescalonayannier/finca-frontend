@@ -104,6 +104,8 @@ export interface EntradaProduccionAlmacenResponse {
 
 export interface LineaSalidaMultipleAlmacenRequest {
   almacenFincaProductoId: string
+  laborId?: string
+  cantidadActividad?: number
   cantidad: number
   items?: ItemSalida[]
 }
