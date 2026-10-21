@@ -266,7 +266,11 @@
             <button @click="seleccionarTodosDias" class="btn-seleccionar-todos">Seleccionar todos</button>
             <button @click="diasSeleccionados = []" class="btn-desmarcar-todos">Desmarcar todos</button>
             <label class="checkbox-horas-extras">
-              <input type="checkbox" v-model="incluirDomingos" />
+              <input
+                v-model="incluirDomingos"
+                type="checkbox"
+                @change="actualizarSeleccionDomingos"
+              />
               <span>Horas Extras (domingos)</span>
             </label>
             <span class="dias-contador">{{ diasSeleccionados.length }} día(s) seleccionado(s)</span>
@@ -586,6 +590,26 @@ const toggleDiaSeleccionado = (fecha: string) => {
   } else {
     diasSeleccionados.value.splice(index, 1)
   }
+}
+
+// La opción de horas extras representa que los domingos disponibles se agregarán
+// al reporte. Mantener esta selección sincronizada habilita el botón Guardar y
+// evita intentar guardar domingos después de desmarcar la opción.
+const actualizarSeleccionDomingos = () => {
+  const domingosDisponibles = diasDelMes.value
+    .filter(dia => dia.esDomingo && !dia.existe)
+    .map(dia => dia.fecha)
+
+  if (incluirDomingos.value) {
+    diasSeleccionados.value = Array.from(new Set([
+      ...diasSeleccionados.value,
+      ...domingosDisponibles
+    ]))
+    return
+  }
+
+  const domingos = new Set(domingosDisponibles)
+  diasSeleccionados.value = diasSeleccionados.value.filter(fecha => !domingos.has(fecha))
 }
 
 // Seleccionar todos los días disponibles (no existentes, domingos solo si incluirDomingos)
